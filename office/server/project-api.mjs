@@ -11,8 +11,9 @@
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat, writeFile, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -204,7 +205,13 @@ async function saveAndPush(message) {
   if (hasChanges) {
     if (!(await step("변경사항 담기", ["add", "-A"]))) return { ok: false, steps };
     const msg = (message && message.trim()) || "[대표] 사무실에서 저장";
-    if (!(await step("커밋", ["commit", "-m", msg]))) return { ok: false, steps };
+    // Windows 에서 git commit -m "한글" 로 넘기면 Node 가 시스템 코드페이지로
+    // 인자를 인코딩해 한글이 ??? 로 깨진다. UTF-8 파일에 써서 -F 로 넘긴다.
+    const msgFile = join(tmpdir(), `skillcraft-commit-${process.pid}-${Date.now()}.txt`);
+    await writeFile(msgFile, msg, "utf8");
+    const committed = await step("커밋", ["commit", "-F", msgFile]);
+    await unlink(msgFile).catch(() => {});
+    if (!committed) return { ok: false, steps };
   } else {
     steps.push({ label: "변경사항 담기", ok: true, out: "바뀐 파일이 없어 커밋을 건너뜀" });
   }
