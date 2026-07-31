@@ -41,6 +41,8 @@ const TAG_TO_AGENT = {
   qa: "qa",
   QA: "qa",
   검증: "qa",
+  개발실: "pm",
+  도구: "pm",
 };
 
 const AGENTS = ["pm", "coordinator", "game-designer", "developer", "qa", "designer"];
