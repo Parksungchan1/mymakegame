@@ -10,7 +10,7 @@ extends CharacterBody2D
 @export var friction: float = 2400.0
 
 ## 홉이 얼마나 높이 뜨는지(픽셀)
-@export var hop_height: float = 34.0
+@export var hop_height: float = 40.0
 ## 홉 한 번에 걸리는 시간(초)
 @export var hop_time: float = 0.40
 
