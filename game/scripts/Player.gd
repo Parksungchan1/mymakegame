@@ -5,7 +5,7 @@ extends CharacterBody2D
 ## 몸통 스프라이트만 위로 떴다 내려오고, 그림자는 작아진다.
 ## 기획서의 회피 수단(이동 + 점프)이 이 홉이다.
 
-@export var speed: float = 260.0
+@export var speed: float = 280.0
 @export var accel: float = 2000.0
 @export var friction: float = 2400.0
 
