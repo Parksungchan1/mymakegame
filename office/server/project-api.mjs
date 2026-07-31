@@ -49,6 +49,16 @@ const TAG_TO_AGENT = {
 
 const AGENTS = ["pm", "coordinator", "game-designer", "developer", "qa", "designer"];
 
+/** 담당자 → 커밋 메시지에 붙일 태그. TAG_TO_AGENT 로 되읽을 수 있어야 한다. */
+const AGENT_TO_TAG = {
+  pm: "PM",
+  coordinator: "코디",
+  "game-designer": "기획",
+  developer: "개발",
+  designer: "아트",
+  qa: "QA",
+};
+
 /** git 명령 실행. 실패해도 서버가 죽지 않게 null 을 돌려준다. */
 async function git(args) {
   try {
@@ -320,7 +330,13 @@ function runJob(job) {
     job.steps = [];
     job.current = null;
 
-    const child = spawn(CLAUDE_BIN, args, { cwd: ROOT, windowsHide: true });
+    const child = spawn(CLAUDE_BIN, args, {
+      cwd: ROOT,
+      windowsHide: true,
+      // 체크포인트 훅이 태그 없는 커밋을 만들지 않도록 표시한다.
+      // 커밋은 아래 autoCommitJob() 이 [역할] 태그를 붙여 직접 한다.
+      env: { ...process.env, SKILLCRAFT_OFFICE_JOB: "1" },
+    });
     job.pid = child.pid;
 
     let err = "";
@@ -405,6 +421,20 @@ function runJob(job) {
   });
 }
 
+/**
+ * 지시가 끝나면 그 결과를 [역할] 태그를 붙여 저장하고 GitHub 에 올린다.
+ * 태그가 있어야 화면이 담당자를 찾아 대표실 보고를 띄운다.
+ */
+async function autoCommitJob(job) {
+  if (job.status !== "완료") return;
+  const tag = AGENT_TO_TAG[job.agent] ?? "개발실";
+  const summary = cut(job.text.split("\n")[0], 72);
+  const r = await saveAndPush(`[${tag}] ${summary}`);
+  job.saved = r.ok;
+  job.savedChanges = r.hadChanges;
+  job.saveError = r.ok ? null : (r.steps.find((s) => !s.ok)?.out ?? "저장 실패");
+}
+
 function send(res, code, body) {
   const json = JSON.stringify(body);
   res.writeHead(code, {
@@ -464,7 +494,10 @@ const server = createServer(async (req, res) => {
     jobs.push(job);
 
     // 앞의 지시가 끝난 뒤에 실행한다 (파일 충돌 방지)
-    queue = queue.then(() => runJob(job)).catch(() => {});
+    queue = queue
+      .then(() => runJob(job))
+      .then(() => autoCommitJob(job))
+      .catch(() => {});
 
     return send(res, 200, { id: job.id, queued: jobs.filter((j) => j.status === "대기").length });
   }

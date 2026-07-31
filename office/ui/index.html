@@ -593,6 +593,8 @@ function renderJobs(data) {
     if (j.error) { const e = el("div", "job-res", card); e.style.color = "var(--red)"; e.textContent = j.error; }
 
     const meta = [];
+    if (j.saved === true) meta.push(j.savedChanges ? "✔ GitHub 저장됨" : "변경 없음");
+    else if (j.saved === false) meta.push("✘ 저장 실패");
     if (j.turns != null) meta.push(j.turns + "턴");
     if (j.costUsd != null) meta.push("$" + j.costUsd.toFixed(3));
     if (j.denials) meta.push("권한 거부 " + j.denials + "건");
