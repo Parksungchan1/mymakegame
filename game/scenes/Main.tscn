@@ -1,0 +1,76 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="1_player"]
+
+[sub_resource type="RectangleShape2D" id="wall_h"]
+size = Vector2(1200, 40)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(40, 680)
+
+[sub_resource type="RectangleShape2D" id="box"]
+size = Vector2(120, 90)
+
+[sub_resource type="RectangleShape2D" id="box2"]
+size = Vector2(90, 160)
+
+[node name="Main" type="Node2D"]
+
+[node name="Floor" type="Polygon2D" parent="."]
+color = Color(0.16, 0.14, 0.21, 1)
+polygon = PackedVector2Array(-600, -340, 600, -340, 600, 340, -600, 340)
+
+[node name="Walls" type="StaticBody2D" parent="."]
+
+[node name="WallTop" type="CollisionShape2D" parent="Walls"]
+position = Vector2(0, -320)
+shape = SubResource("wall_h")
+
+[node name="WallBottom" type="CollisionShape2D" parent="Walls"]
+position = Vector2(0, 320)
+shape = SubResource("wall_h")
+
+[node name="WallLeft" type="CollisionShape2D" parent="Walls"]
+position = Vector2(-580, 0)
+shape = SubResource("wall_v")
+
+[node name="WallRight" type="CollisionShape2D" parent="Walls"]
+position = Vector2(580, 0)
+shape = SubResource("wall_v")
+
+[node name="WallTopView" type="Polygon2D" parent="Walls"]
+color = Color(0.27, 0.23, 0.36, 1)
+polygon = PackedVector2Array(-600, -340, 600, -340, 600, -300, -600, -300)
+
+[node name="WallBottomView" type="Polygon2D" parent="Walls"]
+color = Color(0.27, 0.23, 0.36, 1)
+polygon = PackedVector2Array(-600, 300, 600, 300, 600, 340, -600, 340)
+
+[node name="WallLeftView" type="Polygon2D" parent="Walls"]
+color = Color(0.27, 0.23, 0.36, 1)
+polygon = PackedVector2Array(-600, -340, -560, -340, -560, 340, -600, 340)
+
+[node name="WallRightView" type="Polygon2D" parent="Walls"]
+color = Color(0.27, 0.23, 0.36, 1)
+polygon = PackedVector2Array(560, -340, 600, -340, 600, 340, 560, 340)
+
+[node name="Props" type="StaticBody2D" parent="."]
+
+[node name="BoxA" type="CollisionShape2D" parent="Props"]
+position = Vector2(-260, -120)
+shape = SubResource("box")
+
+[node name="BoxAView" type="Polygon2D" parent="Props"]
+color = Color(0.31, 0.26, 0.42, 1)
+polygon = PackedVector2Array(-320, -165, -200, -165, -200, -75, -320, -75)
+
+[node name="BoxB" type="CollisionShape2D" parent="Props"]
+position = Vector2(280, 110)
+shape = SubResource("box2")
+
+[node name="BoxBView" type="Polygon2D" parent="Props"]
+color = Color(0.31, 0.26, 0.42, 1)
+polygon = PackedVector2Array(235, 30, 325, 30, 325, 190, 235, 190)
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+position = Vector2(0, 120)
