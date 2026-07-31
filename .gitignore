@@ -4,6 +4,8 @@
 /builds/
 *.tmp
 export_presets.cfg
+# setup.ps1 이 받아두는 무설치 Godot (100MB — 저장소에 올리지 않는다)
+/tools/
 # OS
 .DS_Store
 Thumbs.db
