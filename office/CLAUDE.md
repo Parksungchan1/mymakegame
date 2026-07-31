@@ -30,6 +30,35 @@ node server/project-api.mjs
 
 Node 22 이상 필요. 포트를 바꾸려면 `set PORT=3200` 후 실행.
 
+## 화면에서 일 시키기
+
+지시하기 칸에 할 일을 적고 담당자를 고르면 `claude -p` 가 실제로 돌아간다.
+
+- **진행이 실시간으로 보인다.** `stream-json` 으로 도구 사용을 받아
+  `Player.gd 읽음` / `Player.gd 고침` / `실행: git status` 같은 한 줄로 바꿔 쌓는다.
+- **끝나면 자동으로 저장된다.** `[역할] 지시내용` 형태로 커밋하고 GitHub 에 푸시한다.
+  태그가 붙으므로 담당자가 판정되고, 화면에서 대표실로 걸어가 보고한다.
+- **한 번에 하나씩** 실행한다. 동시에 돌리면 같은 파일을 고쳐 충돌한다.
+- 기본 권한은 `acceptEdits` (파일 수정만). `모든 권한 허용` 을 켜면 `bypassPermissions`
+  로 명령 실행까지 맡긴다. 필요할 때만 켠다.
+- 15분을 넘기면 중단한다.
+
+### 알아둘 것 — 체크포인트 훅 충돌
+
+`.claude/checkpoint.ps1` 은 `SessionEnd` 등에서 자동 커밋한다.
+지시로 띄운 `claude -p` 가 끝날 때도 이 훅이 돌아서 **태그 없는
+`checkpoint: auto-save` 커밋이 중복으로 생기던 문제**가 있었다.
+
+→ 개발실이 지시를 띄울 때 `SKILLCRAFT_OFFICE_JOB=1` 환경변수를 넣고,
+`checkpoint.ps1` 이 그 값을 보면 바로 빠져나가게 했다.
+지시 작업의 커밋은 개발실 서버(`autoCommitJob`)가 태그를 붙여 직접 한다.
+
+### 프롬프트는 반드시 stdin 으로
+
+Windows 에서 한글을 명령줄 인자로 넘기면 Node 가 시스템 코드페이지로 인코딩해
+`???` 로 깨진다. 프롬프트는 `child.stdin` 으로, git 커밋 메시지는 UTF-8 파일 + `-F` 로 넘긴다.
+이건 이미 두 번 겪은 문제다. 인자로 바꾸지 말 것.
+
 ## 담당자 6명
 
 `.claude/agents/<id>.md` 에 실제로 존재하는 에이전트만 올린다. 없는 사람은 만들지 않는다.
@@ -41,6 +70,6 @@ Node 22 이상 필요. 포트를 바꾸려면 `set PORT=3200` 후 실행.
 
 ## 아직 안 한 것
 
-- 화면에서 지시 → Claude Code 헤드리스(`claude -p`) 실제 실행 (3단계)
 - 원본 React/Cloudflare 코드(`app/` `worker/` `db/` `drizzle/` `examples/` `build/` `tests/` 및
   `package.json` 등) 정리 — 현재 안 쓰지만 남겨둠. 새 화면이 충분히 검증되면 지운다.
+- 작업 도중 취소 버튼 (지금은 15분 타임아웃뿐)
