@@ -1,5 +1,8 @@
 {
   "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/env-check.ps1", "timeout": 60, "statusMessage": "환경 점검 중..." } ] }
+    ],
     "SubagentStop": [
       { "hooks": [ { "type": "command", "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/checkpoint.ps1", "timeout": 120, "statusMessage": "에이전트 작업 GitHub 저장 중..." } ] }
     ],
