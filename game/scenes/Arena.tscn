@@ -1,0 +1,159 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="1_player"]
+[ext_resource type="Script" path="res://scripts/skill/SkillEditor.gd" id="2_editor"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.07, 0.07, 0.11, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.55, 0.56, 0.68, 1)
+ambient_light_energy = 0.65
+
+[sub_resource type="StandardMaterial3D" id="mat_floor"]
+albedo_color = Color(0.18, 0.16, 0.23, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_wall"]
+albedo_color = Color(0.29, 0.25, 0.38, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="mat_prop"]
+albedo_color = Color(0.38, 0.31, 0.5, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="mesh_floor"]
+size = Vector3(60, 0.5, 60)
+
+[sub_resource type="BoxShape3D" id="col_floor"]
+size = Vector3(60, 0.5, 60)
+
+[sub_resource type="BoxMesh" id="mesh_wall_x"]
+size = Vector3(60, 12, 1)
+
+[sub_resource type="BoxShape3D" id="col_wall_x"]
+size = Vector3(60, 12, 1)
+
+[sub_resource type="BoxMesh" id="mesh_wall_z"]
+size = Vector3(1, 12, 60)
+
+[sub_resource type="BoxShape3D" id="col_wall_z"]
+size = Vector3(1, 12, 60)
+
+[sub_resource type="BoxMesh" id="mesh_prop_a"]
+size = Vector3(8, 3, 5)
+
+[sub_resource type="BoxShape3D" id="col_prop_a"]
+size = Vector3(8, 3, 5)
+
+[sub_resource type="BoxMesh" id="mesh_prop_b"]
+size = Vector3(5, 6, 5)
+
+[sub_resource type="BoxShape3D" id="col_prop_b"]
+size = Vector3(5, 6, 5)
+
+[sub_resource type="BoxMesh" id="mesh_prop_c"]
+size = Vector3(4, 2, 12)
+
+[sub_resource type="BoxShape3D" id="col_prop_c"]
+size = Vector3(4, 2, 12)
+
+[node name="Arena" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.87, -0.35, 0.35, 0, 0.71, 0.71, -0.5, -0.61, 0.61, 0, 18, 0)
+light_energy = 1.1
+shadow_enabled = true
+
+[node name="Floor" type="StaticBody3D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+mesh = SubResource("mesh_floor")
+surface_material_override/0 = SubResource("mat_floor")
+
+[node name="Shape" type="CollisionShape3D" parent="Floor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+shape = SubResource("col_floor")
+
+[node name="Walls" type="StaticBody3D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="NorthMesh" type="MeshInstance3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, -30)
+mesh = SubResource("mesh_wall_x")
+surface_material_override/0 = SubResource("mat_wall")
+
+[node name="NorthShape" type="CollisionShape3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, -30)
+shape = SubResource("col_wall_x")
+
+[node name="SouthMesh" type="MeshInstance3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 30)
+mesh = SubResource("mesh_wall_x")
+surface_material_override/0 = SubResource("mat_wall")
+
+[node name="SouthShape" type="CollisionShape3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 30)
+shape = SubResource("col_wall_x")
+
+[node name="WestMesh" type="MeshInstance3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 6, 0)
+mesh = SubResource("mesh_wall_z")
+surface_material_override/0 = SubResource("mat_wall")
+
+[node name="WestShape" type="CollisionShape3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 6, 0)
+shape = SubResource("col_wall_z")
+
+[node name="EastMesh" type="MeshInstance3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 6, 0)
+mesh = SubResource("mesh_wall_z")
+surface_material_override/0 = SubResource("mat_wall")
+
+[node name="EastShape" type="CollisionShape3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 6, 0)
+shape = SubResource("col_wall_z")
+
+[node name="Props" type="StaticBody3D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="PropAMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 1.5, -8)
+mesh = SubResource("mesh_prop_a")
+surface_material_override/0 = SubResource("mat_prop")
+
+[node name="PropAShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 1.5, -8)
+shape = SubResource("col_prop_a")
+
+[node name="PropBMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 3, 10)
+mesh = SubResource("mesh_prop_b")
+surface_material_override/0 = SubResource("mat_prop")
+
+[node name="PropBShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 3, 10)
+shape = SubResource("col_prop_b")
+
+[node name="PropCMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, -18)
+mesh = SubResource("mesh_prop_c")
+surface_material_override/0 = SubResource("mat_prop")
+
+[node name="PropCShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, -18)
+shape = SubResource("col_prop_c")
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 12)
+
+[node name="SkillEditor" type="CanvasLayer" parent="."]
+script = ExtResource("2_editor")
