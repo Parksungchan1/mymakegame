@@ -1,7 +1,8 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/skill/SkillEditor.gd" id="2_editor"]
+[ext_resource type="Script" path="res://scripts/Dummy.gd" id="3_dummy"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -151,6 +152,29 @@ surface_material_override/0 = SubResource("mat_prop")
 [node name="PropCShape" type="CollisionShape3D" parent="Props"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, -18)
 shape = SubResource("col_prop_c")
+
+; 허수아비 — 2단계에서 발사가 실제로 맞는지 확인할 표적.
+; 봇(4단계)이 아니다. 움직이지도 반격하지도 않는다.
+; 판정 레이어는 world(1) + enemy(3). world 를 겸해야 플레이어가 통과하지 않는다.
+[node name="Dummies" type="Node3D" parent="."]
+
+[node name="DummyA" type="StaticBody3D" parent="Dummies"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
+collision_layer = 5
+collision_mask = 0
+script = ExtResource("3_dummy")
+
+[node name="DummyB" type="StaticBody3D" parent="Dummies"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, 0)
+collision_layer = 5
+collision_mask = 0
+script = ExtResource("3_dummy")
+
+[node name="DummyC" type="StaticBody3D" parent="Dummies"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 2)
+collision_layer = 5
+collision_mask = 0
+script = ExtResource("3_dummy")
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 12)

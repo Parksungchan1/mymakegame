@@ -33,15 +33,36 @@ extends CharacterBody3D
 @export_range(-80.0, 0.0) var cam_pitch_deg: float = -32.0
 @export var cam_distance: float = 7.0
 
+# ── 스킬 (로드맵 2단계: 고정 스킬 1개 발사) ───────────────────
+## 2단계는 "고정 스킬 1개 발사"다. 그래서 수치를 여기 직접 박아둔다.
+## 값은 SkillDB 기본 스킬 "불꽃탄" 과 같게 맞췄다.
+## 3단계에서 에디터가 붙으면 SkillDB.get_slot("Q") 에서 읽어오도록 바꾼다.
+## 지금 SkillDB 를 읽지 않는 건 순서 때문이다 — 2단계가 3단계에 기대면 안 된다.
+const PROJECTILE := preload("res://scripts/skill/Projectile.gd")
+
+@export var skill_name: String = "불꽃탄"
+@export_range(1.0, 100.0) var skill_damage: float = 22.0
+@export_range(1.0, 100.0) var skill_range_pt: float = 18.0
+@export var skill_color: Color = Color(1.0, 0.45, 0.15)
+
 @onready var _pivot: Node3D = $CamPivot
 @onready var _arm: SpringArm3D = $CamPivot/SpringArm3D
 @onready var _body: Node3D = $Body
+@onready var _muzzle: Marker3D = $Body/Wand/Muzzle
+
+## 쿨타임·발동시간·투사체 속도·판정 크기 — 전부 Balance 가 정한다.
+## 2단계 고정 스킬은 그림이 없으니 형태 태그는 기본값 "둥긂"이다.
+var _skill: Dictionary = {}
+var _cooldown_left: float = 0.0
+var _cast_left: float = 0.0
+var _casting: bool = false
 
 
 func _ready() -> void:
 	# 시점 조작이 없으니 마우스는 잡지 않는다. 스킬 제작창에서 그대로 쓴다.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_apply_camera_angle()
+	_skill = Balance.derive(skill_damage, skill_range_pt, Balance.TAG_ROUND)
 
 
 ## 고정각을 실제 노드에 반영. 인스펙터에서 값을 바꿔도 다시 부르면 된다.
@@ -53,6 +74,7 @@ func _apply_camera_angle() -> void:
 
 func _physics_process(delta: float) -> void:
 	_move(delta)
+	_tick_skill(delta)
 
 
 func _move(delta: float) -> void:
@@ -85,8 +107,65 @@ func _move(delta: float) -> void:
 
 
 ## 캐릭터는 자기가 가는 방향을 본다.
+## Godot 에서 앞은 -Z 다. Player.tscn 의 얼굴·마법봉도 -Z 쪽에 붙어 있으니
+## 몸의 -Z 축을 진행 방향에 맞춘다. (+Z 로 맞추면 뒤를 보고 달린다)
 func _face(dir: Vector3, delta: float) -> void:
 	if dir.length_squared() <= 0.0:
 		return
-	var target := atan2(dir.x, dir.z)
+	var target := atan2(-dir.x, -dir.z)
 	_body.rotation.y = lerp_angle(_body.rotation.y, target, turn_speed * delta)
+
+
+## 캐릭터가 보고 있는 방향(수평). 스킬은 이쪽으로 나간다.
+func aim_direction() -> Vector3:
+	var forward := -_body.global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() <= 0.0:
+		return Vector3.FORWARD
+	return forward.normalized()
+
+
+# ── 스킬 발사 ────────────────────────────────────────────────
+## 순서: Q 누름 → 발동 시간만큼 기다림 → 투사체 발사 → 쿨타임.
+## 발동 시간·쿨타임은 Balance 가 정한 값이다. 여기서 임의로 줄이지 않는다.
+##
+## 발동 중에 느려지게 하지 않는다 — 기획서가 "조준 중 감속"을 넣지 말라고 못박았다.
+## 피하는 수단은 이동과 점프뿐이고, 그건 발동 중에도 그대로 살아 있어야 한다.
+func _tick_skill(delta: float) -> void:
+	if _cooldown_left > 0.0:
+		_cooldown_left = maxf(_cooldown_left - delta, 0.0)
+
+	if _casting:
+		_cast_left -= delta
+		if _cast_left <= 0.0:
+			_casting = false
+			_shoot()
+		return
+
+	if _cooldown_left <= 0.0 and Input.is_action_just_pressed("skill_q"):
+		_casting = true
+		_cast_left = float(_skill.get("cast_time", 0.3))
+
+
+func _shoot() -> void:
+	var shot := PROJECTILE.new()
+	shot.configure(
+		aim_direction(),
+		_skill,
+		Balance.damage_per_hit(skill_damage, Balance.TAG_ROUND),
+		skill_color,
+	)
+	# 플레이어 밑에 달면 플레이어가 움직일 때 투사체가 같이 끌려간다.
+	# 그래서 형제로 붙인다. current_scene 은 씬을 코드로 올렸을 때 비어 있어 쓰지 않는다.
+	var world := get_parent()
+	if world == null:
+		return
+	world.add_child(shot)
+	shot.global_position = _muzzle.global_position
+
+	_cooldown_left = float(_skill.get("cooldown", 3.0))
+
+
+## 쿨타임이 얼마나 남았는지 (0.0 = 지금 쏠 수 있음). HUD 가 붙으면 이걸 쓴다.
+func cooldown_left() -> float:
+	return _cooldown_left
