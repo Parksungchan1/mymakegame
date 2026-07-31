@@ -4,11 +4,13 @@
 > 최종 갱신: 2026-07-31
 
 ## 📌 다음 세션에서 가장 먼저 할 일
-1. **GitHub 저장소 주소 받기** → `git remote add origin <주소>` → `git push -u origin main`
-   (아직 원격 저장소 연결 전이라 백업은 로컬에만 있음)
-2. **Godot 4 설치** → 프로젝트 첫 세팅 → 로드맵 1단계(이동+점프)
+1. **Godot 4 설치** → 프로젝트 첫 세팅 → 로드맵 1단계(이동+점프)
+   다운로드: https://godotengine.org/download/windows/ (Godot Engine 4.x — .NET 아닌 일반판)
 
 ## ✅ 완료
+- **GitHub 원격 연결 + 첫 push** (2026-07-31)
+  - 저장소: https://github.com/Parksungchan1/mymakegame (main 브랜치 추적 중)
+  - 이제 자동 체크포인트 훅의 push도 정상 동작함
 - **결정: 그림의 역할 = 하이브리드** (2026-07-31)
   - 그림은 겉모습 + 히트박스 "형태 태그"까지. 세기는 수치 슬라이더 전담.
   - 대원칙: 총 유효 판정 면적은 `범위` 값으로 정규화 → 그림으로 세지게 만들 수 없음(악용 차단)
@@ -25,13 +27,12 @@
 - (없음)
 
 ## ⏭ 다음 할 일
-- [ ] GitHub 저장소 생성 + 첫 push (Private 권장, README/gitignore/license 체크 해제)
 - [ ] Godot 4 설치 및 프로젝트 첫 세팅
 - [ ] 캐릭터 방향키 이동 + 스페이스 점프 (로드맵 1단계)
 - [ ] 밸런스: 형태 태그 판정 임계값(종횡비·복잡도 등) 수치 확정 — 3b 착수 전까지
 
 ## ⛔ 막힌 것 / 결정 대기
-- **GitHub 저장소 주소 미확보** → 원격 백업 불가, 자동 체크포인트 훅의 push도 실패함(커밋은 정상)
+- (없음)
 
 ## 🗒 셋업 시 지시서와 다르게 처리한 것 (기록용)
 1. **프로젝트 위치**: 지시서는 "SETUP 파일이 있는 폴더(=바탕화면)"를 루트로 쓰라고 했으나, 바탕화면에 신분증·통장 사본 파일이 있어 GitHub에 유출될 위험이 있었음. 사용자 확인 후 `C:\Users\k\SkillCraftBattle`로 분리.
@@ -41,5 +42,6 @@
 
 ## 🔎 환경 메모
 - Git 설치됨 (`C:\Program Files\Git`), 시스템 PATH 등록됨
+- 원격: `origin` → https://github.com/Parksungchan1/mymakegame.git (인증 완료 상태)
 - Godot 4: 아직 설치 안 됨 → https://godotengine.org/download/windows/
 - 원본 지시서 `바탕화면\SETUP_스킬크래프트배틀.docx`는 역할을 다함. 삭제 가능.
