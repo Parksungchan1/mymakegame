@@ -9,7 +9,8 @@
 // ============================================================
 
 import { createServer } from "node:http";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { homedir } from "node:os";
 import { promisify } from "node:util";
 import { readFile, readdir, stat, writeFile, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -220,6 +221,190 @@ async function saveAndPush(message) {
   return { ok: pushed, hadChanges: hasChanges, steps };
 }
 
+// ============================================================
+//  지시 → Claude Code 실제 실행
+// ============================================================
+
+/** claude 실행 파일 위치를 한 번만 찾아둔다. */
+function findClaude() {
+  const candidates = [
+    process.env.CLAUDE_BIN,
+    join(homedir(), ".local", "bin", "claude.exe"),
+    join(homedir(), ".local", "bin", "claude"),
+    process.env.APPDATA && join(process.env.APPDATA, "npm", "claude.cmd"),
+  ].filter(Boolean);
+  for (const c of candidates) if (existsSync(c)) return c;
+  return null;
+}
+
+const CLAUDE_BIN = findClaude();
+
+/** 지시 목록. 서버가 살아 있는 동안만 기억한다. */
+const jobs = [];
+let jobSeq = 0;
+/** 동시에 여러 개가 같은 파일을 고치면 충돌하므로 한 번에 하나씩 처리한다. */
+let queue = Promise.resolve();
+
+/** 파일 경로에서 이름만 뽑는다. */
+function baseName(p) {
+  return String(p ?? "").split(/[\\/]/).pop() || String(p ?? "");
+}
+
+function cut(s, n) {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n - 1) + "…" : t;
+}
+
+/**
+ * stream-json 이벤트 한 줄 → 사람이 읽을 한 줄.
+ * 보여줄 게 없는 이벤트는 null 을 돌려 무시한다.
+ */
+function describeEvent(ev) {
+  if (ev.type === "system" && ev.subtype === "init") return "시작함";
+
+  if (ev.type === "assistant" && ev.message?.content) {
+    const parts = [];
+    for (const c of ev.message.content) {
+      if (c.type === "text" && c.text?.trim()) {
+        parts.push(cut(c.text, 160));
+      } else if (c.type === "tool_use") {
+        const i = c.input ?? {};
+        const name = c.name;
+        if (name === "Read") parts.push(`${baseName(i.file_path)} 읽음`);
+        else if (name === "Edit") parts.push(`${baseName(i.file_path)} 고침`);
+        else if (name === "Write") parts.push(`${baseName(i.file_path)} 새로 씀`);
+        else if (name === "Bash") parts.push(`실행: ${cut(i.command, 90)}`);
+        else if (name === "Glob" || name === "Grep") parts.push(`찾는 중: ${cut(i.pattern, 60)}`);
+        else if (name === "TodoWrite") parts.push("할 일 목록 정리");
+        else if (name === "Task") parts.push(`서브에이전트 호출: ${cut(i.description, 60)}`);
+        else parts.push(name);
+      }
+    }
+    return parts.length ? parts.join(" · ") : null;
+  }
+
+  // 도구 실행이 실패한 경우만 알린다 (성공 결과까지 쏟으면 화면이 지저분해진다)
+  if (ev.type === "user" && ev.message?.content) {
+    for (const c of ev.message.content) {
+      if (c.type === "tool_result" && c.is_error) {
+        const t = Array.isArray(c.content)
+          ? c.content.map((x) => x.text ?? "").join(" ")
+          : c.content;
+        return "⚠ " + cut(t, 120);
+      }
+    }
+  }
+  return null;
+}
+
+/** 지시 하나를 실제로 실행한다. */
+function runJob(job) {
+  return new Promise((resolve) => {
+    if (!CLAUDE_BIN) {
+      job.status = "실패";
+      job.error = "claude 실행 파일을 찾지 못했습니다. 환경변수 CLAUDE_BIN 에 경로를 지정하세요.";
+      job.endedAt = new Date().toISOString();
+      return resolve();
+    }
+
+    // stream-json = 줄 단위 JSON 이 작업 도중 실시간으로 나온다.
+    // (-p 와 함께 쓰려면 --verbose 가 필요하다)
+    const args = ["-p", "--output-format", "stream-json", "--verbose"];
+    if (job.agent && job.agent !== "auto") args.push("--agent", job.agent);
+    // acceptEdits = 파일 수정은 허용, 그 외 위험한 작업은 막는다.
+    // full = 전부 허용. 커밋·명령 실행까지 맡길 때만 쓴다.
+    args.push("--permission-mode", job.full ? "bypassPermissions" : "acceptEdits");
+
+    job.status = "작업 중";
+    job.startedAt = new Date().toISOString();
+    job.steps = [];
+    job.current = null;
+
+    const child = spawn(CLAUDE_BIN, args, { cwd: ROOT, windowsHide: true });
+    job.pid = child.pid;
+
+    let err = "";
+    /** 줄이 잘려서 오거나 여러 줄이 한 번에 오므로 개행 기준으로 직접 자른다 */
+    let buf = "";
+    let finalEvent = null;
+
+    const pushStep = (text) => {
+      if (!text) return;
+      job.steps.push({ at: new Date().toISOString(), text });
+      if (job.steps.length > 60) job.steps.shift();
+      job.current = text;
+    };
+
+    const handleLine = (line) => {
+      const s = line.trim();
+      if (!s) return;
+      let ev;
+      try {
+        ev = JSON.parse(s);
+      } catch {
+        return; // JSON 이 아닌 줄은 버린다. 서버가 죽으면 안 된다.
+      }
+      if (ev.type === "result") finalEvent = ev;
+      pushStep(describeEvent(ev));
+    };
+
+    child.stdout.on("data", (d) => {
+      buf += d.toString("utf8");
+      let nl;
+      while ((nl = buf.indexOf("\n")) !== -1) {
+        handleLine(buf.slice(0, nl));
+        buf = buf.slice(nl + 1);
+      }
+    });
+    child.stderr.on("data", (d) => { err += d.toString("utf8"); });
+
+    // 한글이 깨지지 않도록 인자가 아닌 stdin 으로 넘긴다
+    child.stdin.setDefaultEncoding("utf8");
+    child.stdin.end(job.text, "utf8");
+
+    const timer = setTimeout(() => {
+      job.timedOut = true;
+      child.kill();
+    }, 15 * 60 * 1000);
+
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      job.status = "실패";
+      job.error = String(e.message);
+      job.endedAt = new Date().toISOString();
+      resolve();
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (buf.trim()) handleLine(buf); // 마지막 줄에 개행이 없을 수 있다
+      job.endedAt = new Date().toISOString();
+      job.exitCode = code;
+      job.current = null;
+
+      if (job.timedOut) {
+        job.status = "실패";
+        job.error = "15분을 넘겨 중단했습니다.";
+        return resolve();
+      }
+
+      if (finalEvent) {
+        job.result = finalEvent.result ?? null;
+        job.costUsd = finalEvent.total_cost_usd ?? null;
+        job.turns = finalEvent.num_turns ?? null;
+        job.denials = (finalEvent.permission_denials ?? []).length;
+        job.status = finalEvent.is_error ? "실패" : "완료";
+        if (finalEvent.is_error) job.error = finalEvent.result ?? "알 수 없는 오류";
+      } else {
+        // result 이벤트가 없으면 비정상 종료다
+        job.status = "실패";
+        job.error = (err.trim() || `claude 가 결과 없이 종료했습니다 (코드 ${code})`).slice(0, 1000);
+      }
+      resolve();
+    });
+  });
+}
+
 function send(res, code, body) {
   const json = JSON.stringify(body);
   res.writeHead(code, {
@@ -243,6 +428,45 @@ const server = createServer(async (req, res) => {
     } catch (err) {
       return send(res, 500, { error: String(err.message) });
     }
+  }
+
+  if (url.pathname === "/api/jobs" && req.method === "GET") {
+    return send(res, 200, {
+      claudeFound: Boolean(CLAUDE_BIN),
+      jobs: jobs.slice(-25).reverse(),
+    });
+  }
+
+  if (url.pathname === "/api/order" && req.method === "POST") {
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    let body = {};
+    try {
+      body = JSON.parse(raw || "{}");
+    } catch {
+      return send(res, 400, { error: "본문을 읽지 못했습니다." });
+    }
+    const text = String(body.text ?? "").trim();
+    if (!text) return send(res, 400, { error: "지시 내용이 비어 있습니다." });
+
+    const job = {
+      id: ++jobSeq,
+      agent: String(body.agent ?? "auto"),
+      text,
+      full: Boolean(body.full),
+      status: "대기",
+      queuedAt: new Date().toISOString(),
+      startedAt: null,
+      endedAt: null,
+      result: null,
+      error: null,
+    };
+    jobs.push(job);
+
+    // 앞의 지시가 끝난 뒤에 실행한다 (파일 충돌 방지)
+    queue = queue.then(() => runJob(job)).catch(() => {});
+
+    return send(res, 200, { id: job.id, queued: jobs.filter((j) => j.status === "대기").length });
   }
 
   if (url.pathname === "/api/save" && req.method === "POST") {

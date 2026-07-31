@@ -23,7 +23,7 @@
     margin: 0;
     background: var(--bg);
     color: var(--ink);
-    font: 14px/1.55 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+    font: 16px/1.65 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
   }
   a { color: var(--lav); }
 
@@ -37,12 +37,12 @@
     width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
     background: linear-gradient(135deg, var(--pink), var(--lav)); font-size: 18px;
   }
-  h1 { font-size: 17px; margin: 0; letter-spacing: -.2px; }
-  .sub { color: var(--dim); font-size: 12px; margin-top: 1px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -.2px; }
+  .sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
   .spacer { flex: 1; }
 
   .pill {
-    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    font-size: 13px; padding: 5px 11px; border-radius: 999px;
     background: var(--panel2); border: 1px solid var(--line); color: var(--dim);
     white-space: nowrap;
   }
@@ -58,8 +58,8 @@
     padding: 14px; margin-bottom: 14px;
   }
   .card h2 {
-    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
-    color: var(--dim); margin: 0 0 10px; font-weight: 700;
+    font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); margin: 0 0 11px; font-weight: 700;
   }
 
   /* ---------- 사무실 ---------- */
@@ -96,17 +96,17 @@
     border: 1.5px solid var(--panel);
   }
   .person .tag {
-    margin-top: 2px; text-align: center; font-size: 10px; color: var(--ink);
-    background: rgba(0,0,0,.45); border-radius: 4px; padding: 0 4px; white-space: nowrap;
+    margin-top: 2px; text-align: center; font-size: 11px; color: var(--ink);
+    background: rgba(0,0,0,.45); border-radius: 4px; padding: 0 5px; white-space: nowrap;
   }
   .person.busy .body { animation: bob .6s steps(2, end) infinite; }
   @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 
   .bubble {
     position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
-    margin-bottom: 6px; max-width: 230px; width: max-content;
-    background: #fffdf6; color: #241e35; font-size: 11px; line-height: 1.4;
-    padding: 5px 8px; border-radius: 7px; box-shadow: 0 3px 0 rgba(0,0,0,.3);
+    margin-bottom: 6px; max-width: 280px; width: max-content;
+    background: #fffdf6; color: #241e35; font-size: 13px; line-height: 1.45;
+    padding: 6px 9px; border-radius: 7px; box-shadow: 0 3px 0 rgba(0,0,0,.3);
     white-space: normal; text-align: left;
   }
   .bubble::after {
@@ -115,46 +115,94 @@
   }
 
   /* ---------- 직원 카드 ---------- */
-  .staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 8px; }
-  .s-item { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
+  .staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px,1fr)); gap: 9px; }
+  .s-item { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; }
   .s-top { display: flex; align-items: center; gap: 6px; }
-  .s-name { font-weight: 700; font-size: 13px; }
-  .s-file { font-size: 10px; color: var(--dim); }
-  .s-line { margin-top: 5px; font-size: 11px; color: var(--dim); word-break: break-word; }
+  .s-name { font-weight: 700; font-size: 15px; }
+  .s-file { font-size: 11px; color: var(--dim); }
+  .s-line { margin-top: 6px; font-size: 13px; color: var(--dim); word-break: break-word; }
   .s-line.real { color: var(--ink); }
-  .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+  .badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
   .badge.on { color: var(--mint); border-color: #2f5c4c; }
   .badge.off { color: var(--red); border-color: #63333a; }
 
   /* ---------- 목록 ---------- */
   ul.plain { list-style: none; margin: 0; padding: 0; }
-  ul.plain li { padding: 5px 0; border-bottom: 1px dashed #342c49; font-size: 12.5px; }
+  ul.plain li { padding: 6px 0; border-bottom: 1px dashed #342c49; font-size: 14px; }
   ul.plain li:last-child { border-bottom: 0; }
-  .mono { font-family: Consolas, "Courier New", monospace; font-size: 11.5px; color: var(--lav); }
+  .mono { font-family: Consolas, "Courier New", monospace; font-size: 13px; color: var(--lav); }
   .muted { color: var(--dim); }
-  .sec-title { font-size: 12px; color: var(--yellow); margin: 10px 0 4px; font-weight: 700; }
+  .sec-title { font-size: 13.5px; color: var(--yellow); margin: 12px 0 5px; font-weight: 700; }
   .sec-title:first-child { margin-top: 0; }
 
   /* ---------- 저장 ---------- */
   .save-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   input[type=text] {
     flex: 1; min-width: 180px; background: #1b1628; color: var(--ink);
-    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 15px;
   }
   button {
     background: linear-gradient(135deg, var(--pink), var(--lav)); color: #241e35;
-    border: 0; border-radius: 8px; padding: 9px 14px; font: inherit; font-weight: 700;
+    border: 0; border-radius: 8px; padding: 10px 16px; font: inherit; font-size: 15px; font-weight: 700;
     cursor: pointer; white-space: nowrap;
   }
   button:disabled { opacity: .5; cursor: default; }
   button.ghost { background: var(--panel2); color: var(--dim); border: 1px solid var(--line); font-weight: 400; }
-  .steps { margin-top: 9px; font-size: 12px; }
-  .steps div { padding: 3px 0; }
+  .steps { margin-top: 10px; font-size: 14px; }
+  .steps div { padding: 4px 0; }
   .steps .ok::before { content: "✔ "; color: var(--mint); }
   .steps .no::before { content: "✘ "; color: var(--red); }
   .steps pre {
     margin: 2px 0 0 14px; font-size: 11px; color: var(--dim); white-space: pre-wrap; word-break: break-all;
   }
+
+  /* ---------- 지시 ---------- */
+  textarea {
+    width: 100%; min-height: 84px; resize: vertical;
+    background: #1b1628; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 15px; line-height: 1.6;
+  }
+  select {
+    background: #1b1628; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 15px;
+  }
+  .order-row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin-top: 9px; }
+  .chk { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--dim); cursor: pointer; }
+  .warn-note { font-size: 13px; color: var(--yellow); margin-top: 8px; display: none; }
+  .warn-note.show { display: block; }
+
+  .job { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; margin-bottom: 10px; background: var(--panel2); }
+  .job:last-child { margin-bottom: 0; }
+  .job-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .job-who { font-weight: 700; font-size: 15px; }
+  .job-st { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+  .job-st.run { color: var(--yellow); border-color: #5c5330; }
+  .job-st.done { color: var(--mint); border-color: #2f5c4c; }
+  .job-st.fail { color: var(--red); border-color: #63333a; }
+  .job-text { font-size: 14px; color: var(--dim); margin-top: 6px; word-break: break-word; }
+  .job-res {
+    margin-top: 8px; font-size: 14px; line-height: 1.6; background: #1b1628; border-radius: 7px;
+    padding: 9px 11px; white-space: pre-wrap; word-break: break-word;
+    max-height: 260px; overflow: auto;
+  }
+  .job-meta { margin-top: 7px; font-size: 12.5px; color: var(--dim); }
+
+  /* 작업 진행 단계 — 실시간으로 쌓인다 */
+  .job-steps {
+    margin-top: 8px; background: #1b1628; border-radius: 7px; padding: 8px 11px;
+    max-height: 240px; overflow: auto;
+  }
+  .job-steps .st {
+    font-size: 13.5px; line-height: 1.55; color: var(--dim);
+    padding: 3px 0 3px 15px; position: relative; word-break: break-word;
+  }
+  .job-steps .st::before {
+    content: ""; position: absolute; left: 3px; top: 10px;
+    width: 5px; height: 5px; border-radius: 50%; background: #4d4467;
+  }
+  .job-steps .st.now { color: var(--yellow); }
+  .job-steps .st.now::before { background: var(--yellow); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 
   footer { margin-top: 20px; text-align: center; font-size: 11px; color: var(--dim); }
 </style>
@@ -185,6 +233,31 @@
       </div>
 
       <div class="card">
+        <h2>지시하기</h2>
+        <textarea id="order" placeholder="예) 플레이어 이동 속도를 조금 올리고 홉 높이를 낮춰줘"></textarea>
+        <div class="order-row">
+          <select id="who">
+            <option value="auto">담당 자동</option>
+            <option value="pm">PM</option>
+            <option value="coordinator">코디네이터</option>
+            <option value="game-designer">기획</option>
+            <option value="developer">개발</option>
+            <option value="designer">아트</option>
+            <option value="qa">QA</option>
+          </select>
+          <label class="chk"><input type="checkbox" id="full" /> 모든 권한 허용</label>
+          <div class="spacer" style="flex:1"></div>
+          <button id="send">지시 보내기</button>
+        </div>
+        <div class="warn-note" id="warn">
+          ⚠ 모든 권한 = 명령 실행·커밋까지 확인 없이 진행합니다. 필요할 때만 켜세요.
+        </div>
+        <div class="warn-note show" id="nobin" style="display:none; color:var(--red)">
+          ⚠ claude 실행 파일을 찾지 못했습니다. 지시를 보낼 수 없습니다.
+        </div>
+      </div>
+
+      <div class="card">
         <h2>담당자</h2>
         <div class="staff" id="staff"></div>
       </div>
@@ -200,6 +273,11 @@
     </div>
 
     <div>
+      <div class="card">
+        <h2>지시 내역</h2>
+        <div id="jobs"><span class="muted">아직 보낸 지시가 없습니다.</span></div>
+      </div>
+
       <div class="card">
         <h2>작업 기록 (git)</h2>
         <ul class="plain" id="commits"><li class="muted">불러오는 중…</li></ul>
@@ -250,7 +328,6 @@ const ORDER = ["pm", "coordinator", "game-designer", "developer", "designer", "q
 const floor = document.getElementById("floor");
 const people = {};   // id -> { el, bubbleEl, busy }
 let lastSeenCommit = null;
-let reporting = false;
 
 function el(tag, cls, parent) {
   const n = document.createElement(tag);
@@ -318,10 +395,14 @@ function setDot(id, color) {
   if (p) p.dot.style.background = color;
 }
 
-/** 새 커밋이 감지되면 담당자가 대표실로 걸어가 보고하고 자리로 돌아간다 */
-async function reportToCeo(agentId, text) {
-  if (reporting || !people[agentId]) return;
-  reporting = true;
+/** 보고는 한 번에 한 명씩. 겹치면 줄을 세운다(놓치지 않는다). */
+let reportQueue = Promise.resolve();
+function reportToCeo(agentId, text) {
+  if (!people[agentId]) return;
+  reportQueue = reportQueue.then(() => doReport(agentId, text)).catch(() => {});
+}
+
+async function doReport(agentId, text) {
   const seat = SEATS[agentId];
   setBusy(agentId, false);
   moveTo(agentId, { x: REPORT_SPOT.x, y: seat.y });      // 복도로
@@ -336,7 +417,6 @@ async function reportToCeo(agentId, text) {
   await wait(950);
   moveTo(agentId, seat);
   await wait(950);
-  reporting = false;
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -393,8 +473,10 @@ function renderStaff(d) {
     const t = a.lastCommit ? new Date(a.lastCommit.date).getTime()
             : a.report.mtime ? new Date(a.report.mtime).getTime() : 0;
     const fresh = t && (Date.now() - t) < 10 * 60 * 1000;
-    setBusy(a.id, fresh);
-    setDot(a.id, !a.defined ? "#ff7b7b" : fresh ? "#fff3b0" : a.commitCount ? "#b8f0dd" : "#6b6382");
+    const working = busyAgents.has(a.id);
+    setBusy(a.id, fresh || working);
+    setDot(a.id, !a.defined ? "#ff7b7b" : working ? "#ff8fc0"
+      : fresh ? "#fff3b0" : a.commitCount ? "#b8f0dd" : "#6b6382");
   }
 }
 
@@ -458,6 +540,130 @@ async function poll() {
   }
 }
 
+// ---------- 지시 ----------
+
+const jobState = {};     // id -> 마지막으로 본 상태
+const bubbleState = {};  // id -> 말풍선에 마지막으로 띄운 문장
+let busyAgents = new Set();
+let anyJobRunning = false;
+
+function shorten(s, n) {
+  const t = String(s).replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n - 1) + "…" : t;
+}
+
+function renderJobs(data) {
+  document.getElementById("nobin").style.display = data.claudeFound ? "none" : "block";
+  document.getElementById("send").disabled = !data.claudeFound;
+
+  const box = document.getElementById("jobs");
+  if (!data.jobs.length) {
+    box.innerHTML = '<span class="muted">아직 보낸 지시가 없습니다.</span>';
+    return;
+  }
+  box.innerHTML = "";
+  const nowBusy = new Set();
+
+  for (const j of data.jobs) {
+    const who = j.agent === "auto" ? "담당 자동" : (LOOK[j.agent]?.label ?? j.agent);
+    const card = el("div", "job", box);
+    const top = el("div", "job-top", card);
+    el("span", "job-who", top).textContent = who;
+    const st = el("span", "job-st " +
+      (j.status === "작업 중" ? "run" : j.status === "완료" ? "done" : j.status === "실패" ? "fail" : ""), top);
+    st.textContent = j.status;
+    if (j.full) { const f = el("span", "job-st fail", top); f.textContent = "모든 권한"; }
+
+    el("div", "job-text", card).textContent = j.text;
+
+    // 진행 단계 — 작업 중에는 실시간으로 늘어난다
+    if (j.steps && j.steps.length) {
+      const box2 = el("div", "job-steps", card);
+      const running = j.status === "작업 중";
+      j.steps.forEach((s, i) => {
+        const isLast = i === j.steps.length - 1;
+        const line = el("div", "st" + (running && isLast ? " now" : ""), box2);
+        line.textContent = s.text;
+      });
+      // 작업 중이면 방금 생긴 줄이 보이도록 아래로 붙여둔다
+      if (running) box2.scrollTop = box2.scrollHeight;
+    }
+
+    if (j.result) el("div", "job-res", card).textContent = j.result;
+    if (j.error) { const e = el("div", "job-res", card); e.style.color = "var(--red)"; e.textContent = j.error; }
+
+    const meta = [];
+    if (j.turns != null) meta.push(j.turns + "턴");
+    if (j.costUsd != null) meta.push("$" + j.costUsd.toFixed(3));
+    if (j.denials) meta.push("권한 거부 " + j.denials + "건");
+    if (j.startedAt && j.endedAt) {
+      meta.push(Math.round((new Date(j.endedAt) - new Date(j.startedAt)) / 1000) + "초");
+    }
+    if (meta.length) el("div", "job-meta", card).textContent = meta.join(" · ");
+
+    // 사무실 반응
+    const target = j.agent !== "auto" && people[j.agent] ? j.agent : "pm";
+    if (j.status === "작업 중") {
+      nowBusy.add(target);
+      // 말풍선을 현재 작업 단계로 계속 갱신한다
+      const now = j.current ?? j.text;
+      if (bubbleState[j.id] !== now) {
+        bubbleState[j.id] = now;
+        say(target, shorten(now, 70), 0);
+      }
+    }
+    if (jobState[j.id] && jobState[j.id] !== j.status && (j.status === "완료" || j.status === "실패")) {
+      const line = j.status === "완료"
+        ? shorten(j.result ?? "작업을 마쳤습니다.", 110)
+        : "실패: " + shorten(j.error ?? "원인 불명", 90);
+      reportToCeo(target, line);
+    }
+    if (j.status !== "작업 중") delete bubbleState[j.id];
+    jobState[j.id] = j.status;
+  }
+  busyAgents = nowBusy;
+  anyJobRunning = nowBusy.size > 0;
+}
+
+async function pollJobs() {
+  try {
+    const res = await fetch("/api/jobs", { cache: "no-store" });
+    if (!res.ok) return;
+    renderJobs(await res.json());
+  } catch { /* 서버가 잠깐 끊긴 경우 — 다음 주기에 다시 시도 */ }
+}
+
+document.getElementById("full").addEventListener("change", (e) => {
+  document.getElementById("warn").classList.toggle("show", e.target.checked);
+});
+
+document.getElementById("send").addEventListener("click", async () => {
+  const ta = document.getElementById("order");
+  const text = ta.value.trim();
+  if (!text) { ta.focus(); return; }
+  const btn = document.getElementById("send");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        agent: document.getElementById("who").value,
+        full: document.getElementById("full").checked,
+      }),
+    });
+    if (res.ok) { ta.value = ""; pollJobs(); }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Ctrl+Enter 로도 보낼 수 있게
+document.getElementById("order").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) document.getElementById("send").click();
+});
+
 document.getElementById("save").addEventListener("click", async () => {
   const btn = document.getElementById("save");
   const steps = document.getElementById("steps");
@@ -488,6 +694,13 @@ document.getElementById("save").addEventListener("click", async () => {
 buildOffice();
 poll();
 setInterval(poll, 5000);
+
+/** 작업 중일 때만 자주 물어본다. 놀고 있으면 느리게. */
+async function jobLoop() {
+  await pollJobs();
+  setTimeout(jobLoop, anyJobRunning ? 1500 : 3000);
+}
+jobLoop();
 </script>
 </body>
 </html>
