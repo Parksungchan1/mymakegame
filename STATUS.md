@@ -4,10 +4,25 @@
 > 최종 갱신: 2026-07-31
 
 ## 📌 다음 세션에서 가장 먼저 할 일
-1. **Godot 4 설치** → 프로젝트 첫 세팅 → 로드맵 1단계(이동+점프)
-   다운로드: https://godotengine.org/download/windows/ (Godot Engine 4.x — .NET 아닌 일반판)
+1. **Godot 프로젝트 첫 세팅** → 로드맵 1단계(이동+점프)
+   Godot 4.7.1 준비됨: `C:\Users\k\Downloads\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64.exe`
+   프로젝트 위치는 `SkillCraftBattle\game\` 권장
 
 ## ✅ 완료
+- **개발실 현황판 구축** (2026-07-31) — `office/`
+  - 갓생맘(@godseng.mom) AI Office 를 가져와 개조. 원본은 미리 써둔 대사를 재생하는
+    연출이었고 LLM 호출이 0건이라, 실제 데이터를 읽는 현황판으로 방향을 바꿈
+  - `office/server/project-api.mjs` — git log · reports/*.md · STATUS.md 를 읽는
+    Node 서버(의존성 0개). 저장→커밋→GitHub 푸시 API 포함
+  - `office/ui/index.html` — 사무실 화면. 새 커밋이 감지되면 담당자가 대표실로
+    걸어가 실제 커밋 메시지로 보고
+  - 커밋 메시지의 `[역할]` 태그로 담당자 자동 판정 (`[기획]`→game-designer 등)
+  - 실행: `office\개발실 열기.cmd` 더블클릭 → http://localhost:3100
+  - 걷어낸 것: 출근·퇴근 시계, 하루 13단계 시나리오, 잡담 대사, 가짜 직원 32명,
+    Notion·Discord·Instagram·Gmail 연동
+- **개발 환경 준비 완료** (2026-07-31)
+  - Godot 4.7.1 (무설치 exe, Downloads 폴더)
+  - Node.js v24.18.1 (`C:\Program Files\nodejs`) + 무설치 v22.22.0 (`C:\Users\k\nodejs-portable`)
 - **GitHub 원격 연결 + 첫 push** (2026-07-31)
   - 저장소: https://github.com/Parksungchan1/mymakegame (main 브랜치 추적 중)
   - 이제 자동 체크포인트 훅의 push도 정상 동작함
@@ -27,7 +42,10 @@
 - (없음)
 
 ## ⏭ 다음 할 일
-- [ ] Godot 4 설치 및 프로젝트 첫 세팅
+- [ ] Godot 프로젝트 첫 세팅 (`SkillCraftBattle\game\`)
+- [ ] 개발실 3단계: 화면에서 지시 → Claude Code 헤드리스 실제 실행
+- [ ] 새 화면 검증 끝나면 `office/` 의 안 쓰는 원본 코드 정리
+      (`app/` `worker/` `db/` `drizzle/` `examples/` `build/` `tests/` `package*.json` 등)
 - [ ] 캐릭터 방향키 이동 + 스페이스 점프 (로드맵 1단계)
 - [ ] 밸런스: 형태 태그 판정 임계값(종횡비·복잡도 등) 수치 확정 — 3b 착수 전까지
 
@@ -43,5 +61,9 @@
 ## 🔎 환경 메모
 - Git 설치됨 (`C:\Program Files\Git`), 시스템 PATH 등록됨
 - 원격: `origin` → https://github.com/Parksungchan1/mymakegame.git (인증 완료 상태)
-- Godot 4: 아직 설치 안 됨 → https://godotengine.org/download/windows/
+- Godot 4.7.1: `Downloads\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64.exe` (무설치)
+- Node.js: v24.18.1 (`C:\Program Files\nodejs`) / 무설치 v22.22.0 (`C:\Users\k\nodejs-portable`)
+- **Windows 주의**: `git commit -m "한글"` 을 Node 의 execFile 로 넘기면 인자가 시스템
+  코드페이지로 인코딩돼 `???` 로 깨진다. UTF-8 파일에 써서 `-F` 로 넘겨야 한다.
+  (커밋 `5ad68cb` 이 이 버그로 깨진 채 남아 있음)
 - 원본 지시서 `바탕화면\SETUP_스킬크래프트배틀.docx`는 역할을 다함. 삭제 가능.
