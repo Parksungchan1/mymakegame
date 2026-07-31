@@ -1,28 +1,155 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=87 format=3]
+
+; ── 맵 아트: 「거대한 원룸 한 칸」 ────────────────────────────
+; 기획서 10행 "맵: 거대한 원룸 한 칸, 소형 인간들이 싸움".
+; 그래서 여기는 빈 방이 아니라 **가구가 꽉 찬 방**이어야 하고,
+; 캐릭터(키 1.7)는 그 가구들 사이를 뛰어다니는 소형 인간이다.
+; 방 60m ÷ 캐릭터 1.7m ≒ 실제 6m 방에 키 17cm 사람이 있는 비율.
+;
+; 카메라는 고정각이다(yaw 0°, pitch -32°, 7m). 화면 위쪽이 언제나 -Z(북).
+; 그래서 아트는 두 가지를 지킨다.
+;   1) 북쪽 벽은 **항상 배경**이다. 아무 무늬도 넣지 않고 차분한 회색으로 둔다.
+;      투사체(유저가 고른 밝은 색)가 거기서 튀어야 한다.
+;   2) 창문은 서쪽 벽에 둔다. 북쪽에 두면 밝은 면이 늘 배경에 깔려 이펙트를 잡아먹는다.
+;
+; 전투 동선(엄폐/우회) 의도:
+;   · 침대(북서) — 큰 덩어리. 정면 돌파 불가, 돌아가야 한다. 책 계단으로만 위에 오른다.
+;   · 책 더미  — 유일한 고지대 진입로. 1.1m 계단 3칸(점프 높이 1.2m 안쪽) → 침대 위.
+;   · 책상(동/북동) — 다리 4개 사이가 통로. 상판이 지붕이라 위에서 오는 시야가 끊긴다.
+;                     상판 밑 7m — 카메라(약 5.2m)가 들어갈 수 있게 일부러 높게 잡았다.
+;   · 의자(동)   — 등받이가 세로 시야 차단벽. 앉는 판 밑은 통로.
+;   · 머그컵(서) — 둥근 기둥 엄폐. 돌면서 싸우는 자리.
+;   · 방석 2개   — 높이 1.1m 낮은 엄폐. 뛰어 올라갈 수 있다.
+;   · 택배상자(남동)·연필(남서) — 코너 채우기 + 낮은 엄폐.
+;   가운데(러그 위)는 비워 둔다. 허수아비·스폰이 거기 있고, 교전이 열려야 한다.
+;
+; 색: 방 전체 채도를 낮게(회색~베이지) 눌렀다. 스킬 투사체는 유저가 아무 색이나
+; 고르므로 배경이 색을 먹으면 안 된다. 대신 머그컵(빨강)·책(초록/자주/남색)처럼
+; 몇 개만 색을 줘서 "빨간 컵 쪽으로 돌아가" 같은 위치 지시가 되게 했다.
 
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/skill/SkillEditor.gd" id="2_editor"]
 [ext_resource type="Script" path="res://scripts/Dummy.gd" id="3_dummy"]
 
+; 배경은 어둡게 두되 앰비언트를 올려 물체가 검게 죽지 않게 한다.
+; 글로우는 마법 이펙트용 — 밝은 투사체만 번지게 문턱(threshold)을 1.0 로 잡았다.
 [sub_resource type="Environment" id="env"]
 background_mode = 1
-background_color = Color(0.07, 0.07, 0.11, 1)
+background_color = Color(0.1, 0.11, 0.14, 1)
 ambient_light_source = 2
-ambient_light_color = Color(0.55, 0.56, 0.68, 1)
-ambient_light_energy = 0.65
+ambient_light_color = Color(0.72, 0.7, 0.68, 1)
+ambient_light_energy = 0.7
+tonemap_mode = 2
+tonemap_white = 1.0
+glow_enabled = true
+glow_intensity = 0.3
+glow_strength = 0.9
+glow_bloom = 0.0
+glow_blend_mode = 1
+glow_hdr_threshold = 1.3
 
+; ── 재질 ──────────────────────────────────────────────────────
 [sub_resource type="StandardMaterial3D" id="mat_floor"]
-albedo_color = Color(0.18, 0.16, 0.23, 1)
-roughness = 0.9
+albedo_color = Color(0.44, 0.38, 0.31, 1)
+roughness = 0.88
+
+[sub_resource type="StandardMaterial3D" id="mat_rug"]
+albedo_color = Color(0.42, 0.41, 0.42, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_rug_inner"]
+albedo_color = Color(0.48, 0.47, 0.47, 1)
+roughness = 0.95
 
 [sub_resource type="StandardMaterial3D" id="mat_wall"]
-albedo_color = Color(0.29, 0.25, 0.38, 1)
-roughness = 0.85
+albedo_color = Color(0.44, 0.43, 0.41, 1)
+roughness = 0.9
 
-[sub_resource type="StandardMaterial3D" id="mat_prop"]
-albedo_color = Color(0.38, 0.31, 0.5, 1)
+[sub_resource type="StandardMaterial3D" id="mat_trim"]
+albedo_color = Color(0.58, 0.57, 0.59, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_bed_wood"]
+albedo_color = Color(0.36, 0.28, 0.22, 1)
 roughness = 0.8
 
+[sub_resource type="StandardMaterial3D" id="mat_bedding"]
+albedo_color = Color(0.56, 0.57, 0.61, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_pillow"]
+albedo_color = Color(0.68, 0.68, 0.71, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_blanket"]
+albedo_color = Color(0.3, 0.45, 0.5, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_desk_wood"]
+albedo_color = Color(0.38, 0.31, 0.25, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="mat_chair"]
+albedo_color = Color(0.34, 0.35, 0.4, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_cardboard"]
+albedo_color = Color(0.52, 0.42, 0.3, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_mug"]
+albedo_color = Color(0.66, 0.32, 0.3, 1)
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="mat_book_a"]
+albedo_color = Color(0.32, 0.43, 0.35, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="mat_book_b"]
+albedo_color = Color(0.45, 0.32, 0.4, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="mat_book_c"]
+albedo_color = Color(0.31, 0.34, 0.48, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="mat_cushion"]
+albedo_color = Color(0.48, 0.42, 0.52, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_pencil"]
+albedo_color = Color(0.66, 0.56, 0.24, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="mat_pencil_tip"]
+albedo_color = Color(0.8, 0.72, 0.6, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_eraser"]
+albedo_color = Color(0.7, 0.45, 0.45, 1)
+roughness = 0.9
+
+; 창문 유리 — 이 방의 광원이다. 세게 하면 실루엣을 잡아먹어서 약하게 잡았다.
+[sub_resource type="StandardMaterial3D" id="mat_glass"]
+albedo_color = Color(0.82, 0.86, 0.92, 1)
+emission_enabled = true
+emission = Color(1, 0.96, 0.88, 1)
+emission_energy_multiplier = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_frame"]
+albedo_color = Color(0.72, 0.71, 0.7, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="mat_door"]
+albedo_color = Color(0.6, 0.56, 0.5, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_knob"]
+albedo_color = Color(0.72, 0.62, 0.3, 1)
+metallic = 0.7
+roughness = 0.3
+
+; ── 방 껍데기 ─────────────────────────────────────────────────
 [sub_resource type="BoxMesh" id="mesh_floor"]
 size = Vector3(60, 0.5, 60)
 
@@ -30,44 +157,221 @@ size = Vector3(60, 0.5, 60)
 size = Vector3(60, 0.5, 60)
 
 [sub_resource type="BoxMesh" id="mesh_wall_x"]
-size = Vector3(60, 12, 1)
+size = Vector3(60, 18, 1)
 
 [sub_resource type="BoxShape3D" id="col_wall_x"]
-size = Vector3(60, 12, 1)
+size = Vector3(60, 18, 1)
 
 [sub_resource type="BoxMesh" id="mesh_wall_z"]
-size = Vector3(1, 12, 60)
+size = Vector3(1, 18, 60)
 
 [sub_resource type="BoxShape3D" id="col_wall_z"]
-size = Vector3(1, 12, 60)
+size = Vector3(1, 18, 60)
 
-[sub_resource type="BoxMesh" id="mesh_prop_a"]
-size = Vector3(8, 3, 5)
+; 걸레받이 — 고정 카메라에서 바닥과 벽의 경계를 읽게 해주는 선이다.
+[sub_resource type="BoxMesh" id="mesh_trim_x"]
+size = Vector3(60, 1.8, 0.4)
 
-[sub_resource type="BoxShape3D" id="col_prop_a"]
-size = Vector3(8, 3, 5)
+[sub_resource type="BoxMesh" id="mesh_trim_z"]
+size = Vector3(0.4, 1.8, 60)
 
-[sub_resource type="BoxMesh" id="mesh_prop_b"]
-size = Vector3(5, 6, 5)
+[sub_resource type="BoxMesh" id="mesh_rug"]
+size = Vector3(22, 0.12, 18)
 
-[sub_resource type="BoxShape3D" id="col_prop_b"]
-size = Vector3(5, 6, 5)
+[sub_resource type="BoxMesh" id="mesh_rug_inner"]
+size = Vector3(15, 0.12, 11)
 
-[sub_resource type="BoxMesh" id="mesh_prop_c"]
-size = Vector3(4, 2, 12)
+; ── 창문(서쪽 벽) ─────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="mesh_glass"]
+size = Vector3(0.25, 13, 24)
 
-[sub_resource type="BoxShape3D" id="col_prop_c"]
-size = Vector3(4, 2, 12)
+[sub_resource type="BoxMesh" id="mesh_win_h"]
+size = Vector3(0.45, 1, 25)
+
+[sub_resource type="BoxMesh" id="mesh_win_v"]
+size = Vector3(0.45, 15, 0.9)
+
+[sub_resource type="BoxMesh" id="mesh_win_mv"]
+size = Vector3(0.45, 13, 0.8)
+
+[sub_resource type="BoxMesh" id="mesh_win_mh"]
+size = Vector3(0.45, 0.8, 24)
+
+; ── 문(동쪽 벽) ───────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="mesh_door"]
+size = Vector3(0.35, 17, 11)
+
+[sub_resource type="BoxMesh" id="mesh_door_frame"]
+size = Vector3(0.3, 18, 12.4)
+
+[sub_resource type="SphereMesh" id="mesh_knob"]
+radius = 0.55
+height = 1.1
+
+; ── 침대 ──────────────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="mesh_bed_frame"]
+size = Vector3(20, 2.6, 16)
+
+[sub_resource type="BoxShape3D" id="col_bed_frame"]
+size = Vector3(20, 2.6, 16)
+
+[sub_resource type="BoxMesh" id="mesh_bed_mat"]
+size = Vector3(19, 1.2, 15)
+
+[sub_resource type="BoxShape3D" id="col_bed_mat"]
+size = Vector3(19, 1.2, 15)
+
+[sub_resource type="BoxMesh" id="mesh_pillow"]
+size = Vector3(7, 1.6, 4.5)
+
+[sub_resource type="BoxShape3D" id="col_pillow"]
+size = Vector3(7, 1.6, 4.5)
+
+[sub_resource type="BoxMesh" id="mesh_blanket"]
+size = Vector3(12, 1.8, 7)
+
+[sub_resource type="BoxShape3D" id="col_blanket"]
+size = Vector3(12, 1.8, 7)
+
+; ── 책 더미(계단) ─────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="mesh_book_a"]
+size = Vector3(8, 1.1, 6)
+
+[sub_resource type="BoxShape3D" id="col_book_a"]
+size = Vector3(8, 1.1, 6)
+
+[sub_resource type="BoxMesh" id="mesh_book_b"]
+size = Vector3(7.5, 1.1, 5.5)
+
+[sub_resource type="BoxShape3D" id="col_book_b"]
+size = Vector3(7.5, 1.1, 5.5)
+
+[sub_resource type="BoxMesh" id="mesh_book_c"]
+size = Vector3(7, 1.1, 5)
+
+[sub_resource type="BoxShape3D" id="col_book_c"]
+size = Vector3(7, 1.1, 5)
+
+; ── 책상 ──────────────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="mesh_desk_top"]
+size = Vector3(24, 1.2, 18)
+
+[sub_resource type="BoxShape3D" id="col_desk_top"]
+size = Vector3(24, 1.2, 18)
+
+[sub_resource type="BoxMesh" id="mesh_desk_leg"]
+size = Vector3(2.4, 7, 2.4)
+
+[sub_resource type="BoxShape3D" id="col_desk_leg"]
+size = Vector3(2.4, 7, 2.4)
+
+; ── 의자 ──────────────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="mesh_chair_seat"]
+size = Vector3(10, 1, 10)
+
+[sub_resource type="BoxShape3D" id="col_chair_seat"]
+size = Vector3(10, 1, 10)
+
+[sub_resource type="BoxMesh" id="mesh_chair_leg"]
+size = Vector3(1.4, 6, 1.4)
+
+[sub_resource type="BoxShape3D" id="col_chair_leg"]
+size = Vector3(1.4, 6, 1.4)
+
+[sub_resource type="BoxMesh" id="mesh_chair_back"]
+size = Vector3(10, 11, 1.6)
+
+[sub_resource type="BoxShape3D" id="col_chair_back"]
+size = Vector3(10, 11, 1.6)
+
+; ── 머그컵 ────────────────────────────────────────────────────
+[sub_resource type="CylinderMesh" id="mesh_mug"]
+top_radius = 3.2
+bottom_radius = 2.9
+height = 5.0
+
+[sub_resource type="CylinderShape3D" id="col_mug"]
+radius = 3.1
+height = 5.0
+
+[sub_resource type="TorusMesh" id="mesh_mug_handle"]
+inner_radius = 0.9
+outer_radius = 1.8
+
+; ── 택배상자 ──────────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="mesh_box_big"]
+size = Vector3(8, 8, 8)
+
+[sub_resource type="BoxShape3D" id="col_box_big"]
+size = Vector3(8, 8, 8)
+
+[sub_resource type="BoxMesh" id="mesh_box_lid"]
+size = Vector3(8.8, 0.7, 8.8)
+
+[sub_resource type="BoxMesh" id="mesh_box_small"]
+size = Vector3(5, 3.5, 5)
+
+[sub_resource type="BoxShape3D" id="col_box_small"]
+size = Vector3(5, 3.5, 5)
+
+; ── 방석(낮은 엄폐 — 1.1m 라 점프로 올라갈 수 있다) ───────────
+[sub_resource type="BoxMesh" id="mesh_cushion_a"]
+size = Vector3(7, 1.1, 7)
+
+[sub_resource type="BoxShape3D" id="col_cushion_a"]
+size = Vector3(7, 1.1, 7)
+
+[sub_resource type="BoxMesh" id="mesh_cushion_b"]
+size = Vector3(8, 1.1, 8)
+
+[sub_resource type="BoxShape3D" id="col_cushion_b"]
+size = Vector3(8, 1.1, 8)
+
+; ── 연필 ──────────────────────────────────────────────────────
+[sub_resource type="CylinderMesh" id="mesh_pencil"]
+top_radius = 0.9
+bottom_radius = 0.9
+height = 14.0
+
+[sub_resource type="CylinderShape3D" id="col_pencil"]
+radius = 0.9
+height = 14.0
+
+[sub_resource type="CylinderMesh" id="mesh_pencil_tip"]
+top_radius = 0.03
+bottom_radius = 0.9
+height = 2.0
+
+[sub_resource type="CylinderMesh" id="mesh_eraser"]
+top_radius = 0.95
+bottom_radius = 0.95
+height = 1.4
 
 [node name="Arena" type="Node3D"]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
 
+; 햇빛 — 서쪽 창에서 들어와 동쪽으로 길게 눕는다. 그림자로 가구의 부피가 읽힌다.
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.87, -0.35, 0.35, 0, 0.71, 0.71, -0.5, -0.61, 0.61, 0, 18, 0)
-light_energy = 1.1
+transform = Transform3D(-0.243, 0, 0.97, 0.7265, 0.6618, 0.182, -0.642, 0.749, -0.161, 0, 24, 0)
+light_color = Color(1, 0.95, 0.86, 1)
+light_energy = 0.7
 shadow_enabled = true
+
+; 반대편 채움광. 그림자 속이 새까매지지 않게만 한다. 그림자 없음.
+; 세게 주면 방향광이 두 개가 되어 입체감이 사라지고 화면이 뿌예진다.
+[node name="Fill" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.34, 0, -0.94, -0.62, 0.75, -0.224, 0.705, 0.661, 0.255, 0, 24, 0)
+light_color = Color(0.82, 0.86, 1, 1)
+light_energy = 0.12
+
+; 천장 조명 자리. 교전이 벌어지는 가운데만 살짝 들어올린다.
+[node name="RoomLamp" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 15, 2)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 0.55
+omni_range = 80.0
 
 [node name="Floor" type="StaticBody3D" parent="."]
 collision_layer = 1
@@ -87,71 +391,376 @@ collision_layer = 1
 collision_mask = 0
 
 [node name="NorthMesh" type="MeshInstance3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, -30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9, -30)
 mesh = SubResource("mesh_wall_x")
 surface_material_override/0 = SubResource("mat_wall")
 
 [node name="NorthShape" type="CollisionShape3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, -30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9, -30)
 shape = SubResource("col_wall_x")
 
 [node name="SouthMesh" type="MeshInstance3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9, 30)
 mesh = SubResource("mesh_wall_x")
 surface_material_override/0 = SubResource("mat_wall")
 
 [node name="SouthShape" type="CollisionShape3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9, 30)
 shape = SubResource("col_wall_x")
 
 [node name="WestMesh" type="MeshInstance3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 9, 0)
 mesh = SubResource("mesh_wall_z")
 surface_material_override/0 = SubResource("mat_wall")
 
 [node name="WestShape" type="CollisionShape3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 9, 0)
 shape = SubResource("col_wall_z")
 
 [node name="EastMesh" type="MeshInstance3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 9, 0)
 mesh = SubResource("mesh_wall_z")
 surface_material_override/0 = SubResource("mat_wall")
 
 [node name="EastShape" type="CollisionShape3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 9, 0)
 shape = SubResource("col_wall_z")
 
+; ── 장식(판정 없음) ───────────────────────────────────────────
+; 벽·바닥에 붙어 있어서 따로 충돌을 줄 필요가 없는 것들.
+[node name="Decor" type="Node3D" parent="."]
+
+[node name="TrimNorth" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -29.3)
+mesh = SubResource("mesh_trim_x")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="TrimSouth" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 29.3)
+mesh = SubResource("mesh_trim_x")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="TrimWest" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.3, 0.9, 0)
+mesh = SubResource("mesh_trim_z")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="TrimEast" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.3, 0.9, 0)
+mesh = SubResource("mesh_trim_z")
+surface_material_override/0 = SubResource("mat_trim")
+
+; 러그 — 가운데가 "여기가 싸우는 자리"라고 알려주는 바닥 표식.
+; 차가운 회청색이라 따뜻한 색 투사체가 위에서 잘 튄다.
+[node name="Rug" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(0.9945, 0, -0.1045, 0, 1, 0, 0.1045, 0, 0.9945, 0, 0.06, 4)
+mesh = SubResource("mesh_rug")
+surface_material_override/0 = SubResource("mat_rug")
+
+[node name="RugInner" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(0.9945, 0, -0.1045, 0, 1, 0, 0.1045, 0, 0.9945, 0, 0.13, 4)
+mesh = SubResource("mesh_rug_inner")
+surface_material_override/0 = SubResource("mat_rug_inner")
+
+[node name="WindowGlass" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.3, 10.5, -2)
+mesh = SubResource("mesh_glass")
+surface_material_override/0 = SubResource("mat_glass")
+
+[node name="WindowTop" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.2, 17.5, -2)
+mesh = SubResource("mesh_win_h")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="WindowBottom" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.2, 3.5, -2)
+mesh = SubResource("mesh_win_h")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="WindowSideA" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.2, 10.5, -14.5)
+mesh = SubResource("mesh_win_v")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="WindowSideB" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.2, 10.5, 10.5)
+mesh = SubResource("mesh_win_v")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="WindowBarV" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.2, 10.5, -2)
+mesh = SubResource("mesh_win_mv")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="WindowBarH" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.2, 10.5, -2)
+mesh = SubResource("mesh_win_mh")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="DoorFrame" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.35, 9, 8)
+mesh = SubResource("mesh_door_frame")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="DoorPanel" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.2, 8.5, 8)
+mesh = SubResource("mesh_door")
+surface_material_override/0 = SubResource("mat_door")
+
+[node name="DoorKnob" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28.9, 8, 3.4)
+mesh = SubResource("mesh_knob")
+surface_material_override/0 = SubResource("mat_knob")
+
+; ── 가구(엄폐물) ──────────────────────────────────────────────
+; CollisionShape3D 는 StaticBody3D 의 **직계 자식**이어야 등록된다.
+; 그래서 노드를 묶지 않고 평평하게 나열한다. 이름 앞부분이 가구 이름이다.
 [node name="Props" type="StaticBody3D" parent="."]
 collision_layer = 1
 collision_mask = 0
 
-[node name="PropAMesh" type="MeshInstance3D" parent="Props"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 1.5, -8)
-mesh = SubResource("mesh_prop_a")
-surface_material_override/0 = SubResource("mat_prop")
+[node name="BedFrameMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19, 1.3, -21)
+mesh = SubResource("mesh_bed_frame")
+surface_material_override/0 = SubResource("mat_bed_wood")
 
-[node name="PropAShape" type="CollisionShape3D" parent="Props"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 1.5, -8)
-shape = SubResource("col_prop_a")
+[node name="BedFrameShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19, 1.3, -21)
+shape = SubResource("col_bed_frame")
 
-[node name="PropBMesh" type="MeshInstance3D" parent="Props"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 3, 10)
-mesh = SubResource("mesh_prop_b")
-surface_material_override/0 = SubResource("mat_prop")
+[node name="BedMatMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19, 3.2, -21)
+mesh = SubResource("mesh_bed_mat")
+surface_material_override/0 = SubResource("mat_bedding")
 
-[node name="PropBShape" type="CollisionShape3D" parent="Props"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 3, 10)
-shape = SubResource("col_prop_b")
+[node name="BedMatShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19, 3.2, -21)
+shape = SubResource("col_bed_mat")
 
-[node name="PropCMesh" type="MeshInstance3D" parent="Props"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, -18)
-mesh = SubResource("mesh_prop_c")
-surface_material_override/0 = SubResource("mat_prop")
+[node name="BedPillowMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9903, 0, 0.1392, 0, 1, 0, -0.1392, 0, 0.9903, -24, 4.6, -26.5)
+mesh = SubResource("mesh_pillow")
+surface_material_override/0 = SubResource("mat_pillow")
 
-[node name="PropCShape" type="CollisionShape3D" parent="Props"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, -18)
-shape = SubResource("col_prop_c")
+[node name="BedPillowShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9903, 0, 0.1392, 0, 1, 0, -0.1392, 0, 0.9903, -24, 4.6, -26.5)
+shape = SubResource("col_pillow")
+
+[node name="BedBlanketMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9781, 0, -0.2079, 0, 1, 0, 0.2079, 0, 0.9781, -16, 4.7, -16.5)
+mesh = SubResource("mesh_blanket")
+surface_material_override/0 = SubResource("mat_blanket")
+
+[node name="BedBlanketShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9781, 0, -0.2079, 0, 1, 0, 0.2079, 0, 0.9781, -16, 4.7, -16.5)
+shape = SubResource("col_blanket")
+
+; 책 3권 = 1.1m 계단 3칸. 점프 높이(1.2m) 안쪽이라 걸어 올라가진다.
+; 맨 위(3.3m)에서 매트리스(3.8m)로 0.5m 만 더 오르면 침대 위 고지대다.
+[node name="BookAMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9903, 0, -0.1392, 0, 1, 0, 0.1392, 0, 0.9903, -9, 0.55, -12)
+mesh = SubResource("mesh_book_a")
+surface_material_override/0 = SubResource("mat_book_a")
+
+[node name="BookAShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9903, 0, -0.1392, 0, 1, 0, 0.1392, 0, 0.9903, -9, 0.55, -12)
+shape = SubResource("col_book_a")
+
+[node name="BookBMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9945, 0, 0.1045, 0, 1, 0, -0.1045, 0, 0.9945, -10, 1.65, -13.5)
+mesh = SubResource("mesh_book_b")
+surface_material_override/0 = SubResource("mat_book_b")
+
+[node name="BookBShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9945, 0, 0.1045, 0, 1, 0, -0.1045, 0, 0.9945, -10, 1.65, -13.5)
+shape = SubResource("col_book_b")
+
+[node name="BookCMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9703, 0, -0.2419, 0, 1, 0, 0.2419, 0, 0.9703, -11, 2.75, -15)
+mesh = SubResource("mesh_book_c")
+surface_material_override/0 = SubResource("mat_book_c")
+
+[node name="BookCShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9703, 0, -0.2419, 0, 1, 0, 0.2419, 0, 0.9703, -11, 2.75, -15)
+shape = SubResource("col_book_c")
+
+; 책상 — 상판 밑 7m 를 비웠다. 캐릭터(1.7m)는 물론 카메라(약 5.2m)도 들어간다.
+; 상판이 지붕이라 밑에 들어가면 위쪽 시야가 끊기고, 다리 4개가 기둥 엄폐가 된다.
+[node name="DeskTopMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 7.6, -15)
+mesh = SubResource("mesh_desk_top")
+surface_material_override/0 = SubResource("mat_desk_wood")
+
+[node name="DeskTopShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 7.6, -15)
+shape = SubResource("col_desk_top")
+
+[node name="DeskLegNWMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 3.5, -22.6)
+mesh = SubResource("mesh_desk_leg")
+surface_material_override/0 = SubResource("mat_desk_wood")
+
+[node name="DeskLegNWShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 3.5, -22.6)
+shape = SubResource("col_desk_leg")
+
+[node name="DeskLegNEMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25.6, 3.5, -22.6)
+mesh = SubResource("mesh_desk_leg")
+surface_material_override/0 = SubResource("mat_desk_wood")
+
+[node name="DeskLegNEShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25.6, 3.5, -22.6)
+shape = SubResource("col_desk_leg")
+
+[node name="DeskLegSWMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 3.5, -7.4)
+mesh = SubResource("mesh_desk_leg")
+surface_material_override/0 = SubResource("mat_desk_wood")
+
+[node name="DeskLegSWShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 3.5, -7.4)
+shape = SubResource("col_desk_leg")
+
+[node name="DeskLegSEMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25.6, 3.5, -7.4)
+mesh = SubResource("mesh_desk_leg")
+surface_material_override/0 = SubResource("mat_desk_wood")
+
+[node name="DeskLegSEShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25.6, 3.5, -7.4)
+shape = SubResource("col_desk_leg")
+
+; 의자 — 책상에서 빼놓은 자세. 등받이(높이 14m)가 남북 시야를 자른다.
+[node name="ChairSeatMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 6.5, 5)
+mesh = SubResource("mesh_chair_seat")
+surface_material_override/0 = SubResource("mat_chair")
+
+[node name="ChairSeatShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 6.5, 5)
+shape = SubResource("col_chair_seat")
+
+[node name="ChairLegNWMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.2, 3, 1.2)
+mesh = SubResource("mesh_chair_leg")
+surface_material_override/0 = SubResource("mat_chair")
+
+[node name="ChairLegNWShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.2, 3, 1.2)
+shape = SubResource("col_chair_leg")
+
+[node name="ChairLegNEMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17.8, 3, 1.2)
+mesh = SubResource("mesh_chair_leg")
+surface_material_override/0 = SubResource("mat_chair")
+
+[node name="ChairLegNEShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17.8, 3, 1.2)
+shape = SubResource("col_chair_leg")
+
+[node name="ChairLegSWMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.2, 3, 8.8)
+mesh = SubResource("mesh_chair_leg")
+surface_material_override/0 = SubResource("mat_chair")
+
+[node name="ChairLegSWShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.2, 3, 8.8)
+shape = SubResource("col_chair_leg")
+
+[node name="ChairLegSEMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17.8, 3, 8.8)
+mesh = SubResource("mesh_chair_leg")
+surface_material_override/0 = SubResource("mat_chair")
+
+[node name="ChairLegSEShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17.8, 3, 8.8)
+shape = SubResource("col_chair_leg")
+
+[node name="ChairBackMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 12.5, 10.2)
+mesh = SubResource("mesh_chair_back")
+surface_material_override/0 = SubResource("mat_chair")
+
+[node name="ChairBackShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 12.5, 10.2)
+shape = SubResource("col_chair_back")
+
+; 머그컵 — 이 맵에서 색이 가장 센 물건. "빨간 컵 쪽" 이 위치 지시어가 된다.
+[node name="MugMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, 2.5, 6)
+mesh = SubResource("mesh_mug")
+surface_material_override/0 = SubResource("mat_mug")
+
+[node name="MugShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, 2.5, 6)
+shape = SubResource("col_mug")
+
+[node name="MugHandleMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -20.3, 3.2, 6)
+mesh = SubResource("mesh_mug_handle")
+surface_material_override/0 = SubResource("mat_mug")
+
+[node name="BoxBigMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9397, 0, -0.342, 0, 1, 0, 0.342, 0, 0.9397, 22, 4, 19)
+mesh = SubResource("mesh_box_big")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="BoxBigShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9397, 0, -0.342, 0, 1, 0, 0.342, 0, 0.9397, 22, 4, 19)
+shape = SubResource("col_box_big")
+
+[node name="BoxLidMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9397, 0, -0.342, 0, 1, 0, 0.342, 0, 0.9397, 22, 8.3, 19)
+mesh = SubResource("mesh_box_lid")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="BoxSmallMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9781, 0, 0.2079, 0, 1, 0, -0.2079, 0, 0.9781, 11, 1.75, 25)
+mesh = SubResource("mesh_box_small")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="BoxSmallShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9781, 0, 0.2079, 0, 1, 0, -0.2079, 0, 0.9781, 11, 1.75, 25)
+shape = SubResource("col_box_small")
+
+[node name="CushionAMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9703, 0, 0.2419, 0, 1, 0, -0.2419, 0, 0.9703, -17, 0.55, 17)
+mesh = SubResource("mesh_cushion_a")
+surface_material_override/0 = SubResource("mat_cushion")
+
+[node name="CushionAShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9703, 0, 0.2419, 0, 1, 0, -0.2419, 0, 0.9703, -17, 0.55, 17)
+shape = SubResource("col_cushion_a")
+
+[node name="CushionBMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.9063, 0, -0.4226, 0, 1, 0, 0.4226, 0, 0.9063, 23, 0.55, -1)
+mesh = SubResource("mesh_cushion_b")
+surface_material_override/0 = SubResource("mat_cushion")
+
+[node name="CushionBShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0.9063, 0, -0.4226, 0, 1, 0, 0.4226, 0, 0.9063, 23, 0.55, -1)
+shape = SubResource("col_cushion_b")
+
+; 연필 — 남서 구석에 굴러다니는 낮은 엄폐. 스케일(작은 사람 / 큰 물건)을 설명하는 소품.
+[node name="PencilMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, -19, 0.9, 23)
+mesh = SubResource("mesh_pencil")
+surface_material_override/0 = SubResource("mat_pencil")
+
+[node name="PencilShape" type="CollisionShape3D" parent="Props"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, -19, 0.9, 23)
+shape = SubResource("col_pencil")
+
+[node name="PencilTipMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, -27, 0.9, 23)
+mesh = SubResource("mesh_pencil_tip")
+surface_material_override/0 = SubResource("mat_pencil_tip")
+
+[node name="PencilEraserMesh" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, -11.3, 0.9, 23)
+mesh = SubResource("mesh_eraser")
+surface_material_override/0 = SubResource("mat_eraser")
 
 ; 허수아비 — 2단계에서 발사가 실제로 맞는지 확인할 표적.
 ; 봇(4단계)이 아니다. 움직이지도 반격하지도 않는다.
