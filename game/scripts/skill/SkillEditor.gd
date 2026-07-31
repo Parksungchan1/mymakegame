@@ -428,8 +428,13 @@ func _refresh() -> void:
 		"한 방 데미지  %.1f" % Balance.damage_per_hit(
 			_damage.value, combat_tag, int(box.get("pellets", 0))),
 		"",
-		"[i]그림 지표 — 채움 %.2f · 종횡 %.2f · 복잡 %.2f · 덩어리 %d[/i]" % [
-			float(metrics["fill_ratio"]), float(metrics["aspect"]),
+		# `신장` 은 회전과 무관한 길쭉함 지표다. 길쭉함 태그는 **이걸** 본다.
+		# `종횡` 은 여전히 바운딩박스 가로/세로다 — 이름과 뜻이 그대로라 거짓말은 아니지만,
+		# 대각선 막대는 종횡이 1.00 인데 태그가 길쭉함이라 이유가 안 보인다. 그래서 둘 다 띄운다.
+		# ⚠ 「종횡」 이라는 이름표를 신장도 값에 붙이지 말 것.
+		"[i]그림 지표 — 채움 %.2f · 신장 %.2f · 종횡 %.2f · 복잡 %.2f · 덩어리 %d[/i]" % [
+			float(metrics["fill_ratio"]), float(metrics.get("elongation", 1.0)),
+			float(metrics["aspect"]),
 			float(metrics["complexity"]), int(metrics["blobs"]),
 		],
 	])
