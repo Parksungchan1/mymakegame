@@ -44,9 +44,14 @@ if (Has "git") {
 # ------------------------------------------------------------
 Say ""
 Say "[2/6] Node.js 확인 (22 이상 필요)" "Cyan"
+# node 가 아니라 node.exe 를 찾는다. System32 에 확장자 없는 빈 'node' 파일이
+# 있는 컴퓨터에서는 PowerShell 이 그걸 먼저 실행해 버전이 빈 값으로 나온다.
+function NodeExe { return (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source }
+
 $nodeOk = $false
-if (Has "node") {
-    $nodeVer = (node -v) -replace "^v", ""
+$nodeExe = NodeExe
+if ($nodeExe) {
+    $nodeVer = (& $nodeExe -v) -replace "^v", ""
     $major = [int]($nodeVer -split "\.")[0]
     if ($major -ge 22) { OK "Node.js v$nodeVer"; $nodeOk = $true }
     else { WARN "Node.js v$nodeVer - 22 미만입니다. 개발실이 안 돌 수 있습니다." }
@@ -60,7 +65,8 @@ if (-not $nodeOk) {
         winget install --id OpenJS.NodeJS.LTS -e --accept-package-agreements --accept-source-agreements | Out-Null
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                     [System.Environment]::GetEnvironmentVariable("Path", "User")
-        if (Has "node") { OK "Node.js $(node -v) 설치 완료"; $nodeOk = $true }
+        $nodeExe = NodeExe
+        if ($nodeExe) { OK "Node.js $(& $nodeExe -v) 설치 완료"; $nodeOk = $true }
     }
     if (-not $nodeOk) {
         FAIL "Node.js 를 직접 설치해주세요: https://nodejs.org (LTS)"

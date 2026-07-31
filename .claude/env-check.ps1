@@ -9,10 +9,15 @@ Set-Location $root
 
 $missing = @()
 
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+# node 가 아니라 node.exe 로 찾는다.
+# System32 에 확장자 없는 빈 'node' 파일이 있는 컴퓨터가 있는데, PowerShell 은
+# 그걸 먼저 실행해서 버전이 빈 값으로 나온다(cmd 는 PATHEXT 때문에 건너뛴다).
+# 그러면 Node 가 멀쩡한데도 "셋업 안 끝났다"고 거짓 경고가 뜬다.
+$nodeExe = (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+if (-not $nodeExe) {
     $missing += "Node.js (개발실이 안 켜짐)"
 } else {
-    $major = [int](((node -v) -replace "^v","") -split "\.")[0]
+    $major = [int](((& $nodeExe -v) -replace "^v","") -split "\.")[0]
     if ($major -lt 22) { $missing += "Node.js 22+ (지금 v$major)" }
 }
 
