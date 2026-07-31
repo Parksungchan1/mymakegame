@@ -80,9 +80,16 @@ func _refresh() -> void:
 	_label.text = "%d / %d" % [int(round(hp)), int(round(max_hp))]
 
 
+## 제작창을 열면 트리가 멈춘다. 그동안 부활 타이머가 돌면
+## 창을 닫고 나왔을 때 허수아비가 멋대로 살아나 있다.
+## `create_timer` 의 세 번째 인자를 false 로 줘야 일시정지를 따라 멈춘다.
+func _wait(seconds: float) -> void:
+	await get_tree().create_timer(seconds, false).timeout
+
+
 func _flash() -> void:
 	_mat.albedo_color = HIT_COLOR
-	await get_tree().create_timer(FLASH_TIME).timeout
+	await _wait(FLASH_TIME)
 	if not _down:
 		_mat.albedo_color = BASE_COLOR
 
@@ -92,7 +99,7 @@ func _fall() -> void:
 	_mat.albedo_color = DOWN_COLOR
 	_label.text = "쓰러짐"
 	rotation.x = deg_to_rad(-80.0)
-	await get_tree().create_timer(respawn_delay).timeout
+	await _wait(respawn_delay)
 	rotation.x = 0.0
 	hp = max_hp
 	_down = false

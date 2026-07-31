@@ -161,6 +161,11 @@ func load_from_disk() -> bool:
 		var mask := PackedByteArray()
 		mask.resize(Balance.GRID * Balance.GRID)
 		var arr: Array = raw.get("mask", [])
+		# 크기가 안 맞으면 그림이 잘리거나 빈칸이 남는다. 조용히 넘기면
+		# "저장했는데 모양이 달라졌다" 를 아무도 설명 못 한다. 티를 낸다.
+		if arr.size() != mask.size():
+			push_warning("SkillDB: %s 슬롯의 그림 크기가 %d 다 (기대 %d). 격자 크기가 바뀌었거나 파일이 손상됐다." % [
+				slot, arr.size(), mask.size()])
 		for i in mini(arr.size(), mask.size()):
 			mask[i] = 1 if int(arr[i]) != 0 else 0
 		_slots[slot] = {

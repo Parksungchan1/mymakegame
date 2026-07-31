@@ -42,8 +42,14 @@ extends CharacterBody3D
 ## 그래서 어떤 그림을 그려도 같은 범위면 총 면적이 같다. 그림으로 세지게 만들 수 없다.
 const PROJECTILE := preload("res://scripts/skill/Projectile.gd")
 
-## 읽어올 슬롯. 지금은 Q 하나만 쓴다. QWER 4슬롯은 로드맵 4단계다.
-const SKILL_SLOT := "Q"
+## QWER 4슬롯. 슬롯마다 쿨타임이 따로 돈다 — 하나 쓰고 다른 걸 바로 쓸 수 있다.
+## 슬롯 이름은 `SkillDB.SLOTS` 와 같고, 입력 액션 이름은 `skill_<소문자>` 규칙이다.
+const SLOT_ACTIONS := {
+	"Q": "skill_q",
+	"W": "skill_w",
+	"E": "skill_e",
+	"R": "skill_r",
+}
 
 ## 투사체가 바닥에서 최소한 이만큼은 떠서 태어나야 한다(판정 반경 위에 더한다).
 const GROUND_CLEARANCE := 0.08
@@ -59,19 +65,16 @@ const GROUND_CLEARANCE := 0.08
 @onready var _body: Node3D = $Body
 @onready var _muzzle: Marker3D = $Body/Wand/Muzzle
 
-## 지금 들고 있는 스킬. `_reload_skill()` 이 SkillDB 에서 채운다.
-var skill_name: String = ""
-var skill_damage: float = 0.0
-var skill_range_pt: float = 0.0
-var skill_color: Color = Color.WHITE
-var skill_mask: PackedByteArray = PackedByteArray()
-var skill_tag: String = ""
+## 슬롯 하나가 들고 있는 것. `_reload_slot()` 이 SkillDB 에서 채운다.
+## 키: name · damage · range_pt · color · mask · tag · derived(Balance 계산 결과)
+var _slots: Dictionary = {}
+## 슬롯별 남은 쿨타임(초). 슬롯마다 따로 돈다.
+var _cooldowns: Dictionary = {}
 
-## 쿨타임·발동시간·투사체 속도·판정 크기 — 전부 Balance 가 정한다.
-var _skill: Dictionary = {}
-var _cooldown_left: float = 0.0
+## 지금 발동 중인 슬롯("" = 없음). 발동 중에는 다른 스킬도 못 쓴다 —
+## 네 개를 동시에 캐스팅하면 마법봉이 네 개 필요하다.
+var _casting_slot: String = ""
 var _cast_left: float = 0.0
-var _casting: bool = false
 
 
 func _ready() -> void:
@@ -80,34 +83,45 @@ func _ready() -> void:
 	_apply_camera_angle()
 	# 제작창에서 저장하면 곧바로 다음 발사에 반영된다.
 	SkillDB.slot_changed.connect(_on_slot_changed)
-	_reload_skill()
+	for slot in SLOT_ACTIONS:
+		_cooldowns[slot] = 0.0
+		_reload_slot(slot)
 
 
 func _on_slot_changed(slot: String) -> void:
-	if slot == SKILL_SLOT:
-		_reload_skill()
+	if SLOT_ACTIONS.has(slot):
+		_reload_slot(slot)
 
 
-## SkillDB → 지금 들고 있는 스킬. 그림·형태 태그까지 전부 읽는다.
-func _reload_skill() -> void:
-	var s: Dictionary = SkillDB.get_slot(SKILL_SLOT)
+## SkillDB → 슬롯 하나. 그림·형태 태그까지 전부 읽는다.
+func _reload_slot(slot: String) -> void:
+	var s: Dictionary = SkillDB.get_slot(slot)
+	var entry := {}
+	# 그림 지표. 빈 그림이면 빈 Dictionary — 그러면 미세 파라미터 없이 태그 기본값으로 간다.
+	var metrics := {}
 	if s.is_empty():
-		skill_name = fallback_skill_name
-		skill_damage = fallback_damage
-		skill_range_pt = fallback_range_pt
-		skill_color = fallback_color
-		skill_mask = PackedByteArray()
-		skill_tag = Balance.TAG_ROUND
+		entry["name"] = fallback_skill_name
+		entry["damage"] = fallback_damage
+		entry["range_pt"] = fallback_range_pt
+		entry["color"] = fallback_color
+		entry["mask"] = PackedByteArray()
+		entry["tag"] = Balance.TAG_ROUND
 	else:
-		skill_name = String(s["name"])
-		skill_damage = float(s["damage"])
-		skill_range_pt = float(s["range_pt"])
-		skill_color = s["color"]
-		skill_mask = s["mask"]
+		entry["name"] = String(s["name"])
+		entry["damage"] = float(s["damage"])
+		entry["range_pt"] = float(s["range_pt"])
+		entry["color"] = s["color"]
+		entry["mask"] = s["mask"]
 		# 저장된 태그를 믿지 않고 그림에서 다시 뽑는다.
 		# 기획 담당이 판정 임계값을 바꾸면 저장된 스킬에도 바로 반영돼야 한다.
-		skill_tag = Balance.tag_from_mask(skill_mask)
-	_skill = Balance.derive(skill_damage, skill_range_pt, skill_tag)
+		metrics = Balance.analyze_mask(entry["mask"])
+		entry["tag"] = Balance.tag_from_metrics(metrics)
+	entry["metrics"] = metrics
+	# 지표를 함께 넘겨야 **같은 태그 안에서도 어떻게 그렸는지가 전투에 반영된다.**
+	# (흩어짐의 탄 수, 뾰족함의 탄 수·퍼짐각 등 — 안 넘기면 태그 기본값으로만 나간다)
+	entry["derived"] = Balance.derive(
+		float(entry["damage"]), float(entry["range_pt"]), String(entry["tag"]), metrics)
+	_slots[slot] = entry
 
 
 ## 고정각을 실제 노드에 반영. 인스펙터에서 값을 바꿔도 다시 부르면 된다.
@@ -177,21 +191,36 @@ func aim_direction() -> Vector3:
 ## 발동 중에 느려지게 하지 않는다 — 기획서가 "조준 중 감속"을 넣지 말라고 못박았다.
 ## 피하는 수단은 이동과 점프뿐이고, 그건 발동 중에도 그대로 살아 있어야 한다.
 func _tick_skill(delta: float) -> void:
-	if _cooldown_left > 0.0:
-		_cooldown_left = maxf(_cooldown_left - delta, 0.0)
+	# 쿨타임은 슬롯마다 따로 돈다. 하나 쓰는 동안 나머지도 계속 식는다.
+	for slot in _cooldowns:
+		if _cooldowns[slot] > 0.0:
+			_cooldowns[slot] = maxf(_cooldowns[slot] - delta, 0.0)
 
-	if _casting:
+	# 발동 중에는 다른 스킬을 못 쓴다. 마법봉은 하나뿐이다.
+	if not _casting_slot.is_empty():
 		_cast_left -= delta
 		if _cast_left <= 0.0:
-			_casting = false
-			_shoot()
+			var slot := _casting_slot
+			_casting_slot = ""
+			_shoot(slot)
 		return
 
-	if _cooldown_left <= 0.0 and Input.is_action_just_pressed("skill_q"):
-		_casting = true
-		# NaN 이 들어오면 어떤 비교도 false 라 _casting 이 영영 안 풀리고
+	for slot in SLOT_ACTIONS:
+		if float(_cooldowns.get(slot, 0.0)) > 0.0:
+			continue
+		if not Input.is_action_just_pressed(String(SLOT_ACTIONS[slot])):
+			continue
+		_casting_slot = slot
+		# NaN 이 들어오면 어떤 비교도 false 라 발동이 영영 안 풀리고
 		# 스킬이 완전히 잠긴다. 망가진 값은 여기서 걸러낸다.
-		_cast_left = _safe_time(_skill.get("cast_time", 0.3), 0.3)
+		_cast_left = _safe_time(_derived(slot).get("cast_time", 0.3), 0.3)
+		break
+
+
+## 그 슬롯의 Balance 계산 결과. 슬롯이 아직 안 읽혔으면 빈 Dictionary.
+func _derived(slot: String) -> Dictionary:
+	var entry: Dictionary = _slots.get(slot, {})
+	return entry.get("derived", {})
 
 
 ## 시간 값이 NaN·무한대·음수면 기본값으로 되돌린다.
@@ -206,32 +235,44 @@ func _safe_time(value: Variant, fallback: float) -> float:
 ## 나누는 건 여기 일이고, 투사체는 "한 발"만 안다.
 ## 발 수와 한 발 데미지는 Balance 가 정한 것을 그대로 따른다 —
 ## 여기서 발 수를 바꾸면 총 데미지가 어긋난다.
-func _shoot() -> void:
+func _shoot(slot: String) -> void:
+	var entry: Dictionary = _slots.get(slot, {})
+	var skill: Dictionary = entry.get("derived", {})
+	if skill.is_empty():
+		return
+
 	var dir := aim_direction()
-	var box: Dictionary = _skill.get("hitbox", {})
+	var box: Dictionary = skill.get("hitbox", {})
 	var kind := String(box.get("kind", "sphere"))
-	var dmg: float = Balance.damage_per_hit(skill_damage, skill_tag)
+	# 탄 수를 명시해서 넘긴다. 태그 기본값(÷3·÷5)에 기대면, 나중에 그림에서 탄 수를
+	# 뽑는 미세 파라미터가 붙었을 때 총 데미지가 조용히 어긋난다.
+	var dmg: float = Balance.damage_per_hit(
+		float(entry["damage"]), String(entry["tag"]), int(box.get("pellets", 0)))
 
 	match kind:
 		"scatter":
-			# 산탄 다발 — 작은 탄이 좁게 퍼진다
-			_spawn_spread(dir, int(box.get("pellets", 5)),
-				Balance.SCATTER_SPREAD_DEG, float(box.get("pellet_radius", 0.3)), dmg)
+			# 산탄 다발 — 작은 탄이 퍼진다.
+			# 퍼짐각을 상수가 아니라 `angle_deg` 에서 읽는다. 그림에 따라 달라지기 때문이다.
+			_spawn_spread(slot, dir, int(box.get("pellets", 5)),
+				float(box.get("angle_deg", Balance.SCATTER_SPREAD_DEG)),
+				float(box.get("pellet_radius", 0.3)), dmg)
 		"cone":
 			# 부채꼴 다단 히트 — 작은 탄을 부챗살로 뿌린다.
-			# 퍼짐각에 히트박스의 angle_deg(판정 각 90°)를 쓰면 안 된다.
-			# 그러면 10m 앞에서 바깥 탄이 10m 옆으로 날아가 사실상 안 맞는다.
-			_spawn_spread(dir, int(box.get("pellets", Balance.CONE_PELLETS)),
-				Balance.CONE_SPREAD_DEG, float(box.get("pellet_radius", 0.3)), dmg)
+			# `angle_deg` 는 이제 실제 퍼짐각과 같은 값이다(기획 담당이 하나로 묶었다).
+			# 예전엔 판정각 90° 를 그대로 퍼짐각으로 써서 10m 앞 바깥 탄이
+			# 10m 옆으로 날아갔다 — 사실상 안 맞는 태그였다.
+			_spawn_spread(slot, dir, int(box.get("pellets", Balance.CONE_PELLETS)),
+				float(box.get("angle_deg", Balance.CONE_SPREAD_DEG)),
+				float(box.get("pellet_radius", 0.3)), dmg)
 		_:
 			# 둥긂(구) · 길쭉함(캡슐) — 한 발
-			_spawn(dir, box, dmg)
+			_spawn(slot, dir, box, dmg)
 
-	_cooldown_left = _safe_time(_skill.get("cooldown", 3.0), 3.0)
+	_cooldowns[slot] = _safe_time(skill.get("cooldown", 3.0), 3.0)
 
 
 ## 부챗살로 count 발. 가운데를 기준으로 spread_deg 안에 고르게 편다.
-func _spawn_spread(dir: Vector3, count: int, spread_deg: float,
+func _spawn_spread(slot: String, dir: Vector3, count: int, spread_deg: float,
 		pellet_radius: float, dmg: float) -> void:
 	count = maxi(count, 1)
 	var shape := {"kind": "sphere", "radius": pellet_radius}
@@ -239,25 +280,28 @@ func _spawn_spread(dir: Vector3, count: int, spread_deg: float,
 		# count 가 1이면 정가운데, 아니면 -spread/2 ~ +spread/2 로 편다
 		var t: float = 0.5 if count == 1 else float(i) / float(count - 1)
 		var angle := deg_to_rad(lerpf(-spread_deg * 0.5, spread_deg * 0.5, t))
-		_spawn(dir.rotated(Vector3.UP, angle), shape, dmg)
+		_spawn(slot, dir.rotated(Vector3.UP, angle), shape, dmg)
 
 
-## 투사체 한 발. 그림·색·수치를 실어 보낸다.
-func _spawn(dir: Vector3, shape: Dictionary, dmg: float) -> void:
+## 투사체 한 발. 그 슬롯의 그림·색·수치를 실어 보낸다.
+func _spawn(slot: String, dir: Vector3, shape: Dictionary, dmg: float) -> void:
 	# 플레이어 밑에 달면 플레이어가 움직일 때 투사체가 같이 끌려간다.
 	# 그래서 형제로 붙인다. current_scene 은 씬을 코드로 올렸을 때 비어 있어 쓰지 않는다.
 	var world := get_parent()
 	if world == null:
 		return
 
+	var entry: Dictionary = _slots.get(slot, {})
+	var skill: Dictionary = entry.get("derived", {})
+
 	var shot := PROJECTILE.new()
 	shot.configure(dir, {
-		"speed": _skill.get("speed", 20.0),
-		"distance": _skill.get("distance", 12.0),
+		"speed": skill.get("speed", 20.0),
+		"distance": skill.get("distance", 12.0),
 		"shape": shape,
 		"damage": dmg,
-		"color": skill_color,
-		"mask": skill_mask,
+		"color": entry.get("color", Color.WHITE),
+		"mask": entry.get("mask", PackedByteArray()),
 	})
 	world.add_child(shot)
 	shot.global_position = _spawn_point(shape)
@@ -275,6 +319,11 @@ func _spawn_point(shape: Dictionary) -> Vector3:
 	return pos
 
 
-## 쿨타임이 얼마나 남았는지 (0.0 = 지금 쏠 수 있음). HUD 가 붙으면 이걸 쓴다.
-func cooldown_left() -> float:
-	return _cooldown_left
+## 그 슬롯의 쿨타임이 얼마나 남았는지 (0.0 = 지금 쏠 수 있음). HUD 가 붙으면 이걸 쓴다.
+func cooldown_left(slot: String = "Q") -> float:
+	return float(_cooldowns.get(slot, 0.0))
+
+
+## 그 슬롯에 든 스킬 이름. HUD·디버그용.
+func slot_name(slot: String) -> String:
+	return String((_slots.get(slot, {}) as Dictionary).get("name", ""))

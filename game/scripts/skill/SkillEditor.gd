@@ -27,6 +27,14 @@ var _cost_label: Label
 var _stat_label: RichTextLabel
 var _slot_buttons: Dictionary = {}
 
+## 저장 안 한 편집이 있는가. 슬롯을 옮기거나 창을 닫을 때 그림이 조용히 날아가는 걸 막는다.
+## 공들여 그린 걸 잃는 건 이 게임에서 제일 아픈 사고다.
+var _dirty: bool = false
+var _loading: bool = false
+var _confirm: ConfirmationDialog
+var _pending_slot: String = ""
+var _save_btn: Button
+
 
 func _ready() -> void:
 	layer = 10
@@ -105,6 +113,18 @@ func _build() -> void:
 	_build_slot_row()
 	_build_body()
 	_build_footer()
+	_build_confirm()
+
+
+func _build_confirm() -> void:
+	_confirm = ConfirmationDialog.new()
+	_confirm.title = "저장 안 한 편집이 있습니다"
+	_confirm.ok_button_text = "버리고 옮기기"
+	_confirm.cancel_button_text = "돌아가기"
+	_confirm.confirmed.connect(_on_confirm_discard)
+	_confirm.canceled.connect(_on_confirm_cancel)
+	_confirm.close_requested.connect(_on_confirm_cancel)
+	add_child(_confirm)
 
 
 func _build_header() -> void:
@@ -157,6 +177,7 @@ func _build_body() -> void:
 	_canvas = SkillCanvas.new()
 	_canvas.custom_minimum_size = Vector2(360, 360)
 	_canvas.mask_changed.connect(_refresh)
+	_canvas.mask_changed.connect(_touch)
 	left.add_child(_canvas)
 
 	var tools := HBoxContainer.new()
@@ -184,6 +205,7 @@ func _build_body() -> void:
 
 	_name_edit = LineEdit.new()
 	_name_edit.placeholder_text = "스킬 이름"
+	_name_edit.text_changed.connect(func(_t: String) -> void: _touch())
 	right.add_child(_name_edit)
 
 	_damage_num = Label.new()
@@ -202,7 +224,8 @@ func _build_body() -> void:
 	_color_pick.custom_minimum_size = Vector2(80, 30)
 	_color_pick.color_changed.connect(func(c: Color) -> void:
 		_canvas.ink = c
-		_canvas.queue_redraw())
+		_canvas.queue_redraw()
+		_touch())
 	color_row.add_child(_color_pick)
 
 	_cost_label = Label.new()
@@ -231,7 +254,9 @@ func _add_slider(parent: Node, label_text: String, num: Label) -> HSlider:
 	s.max_value = 100
 	s.step = 1
 	s.custom_minimum_size = Vector2(330, 22)
-	s.value_changed.connect(func(_v: float) -> void: _refresh())
+	s.value_changed.connect(func(_v: float) -> void:
+		_refresh()
+		_touch())
 	parent.add_child(s)
 	return s
 
@@ -249,11 +274,11 @@ func _build_footer() -> void:
 		_load_slot(_slot))
 	row.add_child(reset)
 
-	var save := Button.new()
-	save.text = "저장"
-	save.custom_minimum_size = Vector2(110, 38)
-	save.pressed.connect(_save)
-	row.add_child(save)
+	_save_btn = Button.new()
+	_save_btn.text = "저장"
+	_save_btn.custom_minimum_size = Vector2(110, 38)
+	_save_btn.pressed.connect(_save)
+	row.add_child(_save_btn)
 
 	var close_btn := Button.new()
 	close_btn.text = "닫기"
@@ -267,14 +292,58 @@ func _build_footer() -> void:
 # ─────────────────────────────────────────────────────────────
 
 func _on_slot_pressed(slot: String) -> void:
-	_slot = slot
+	if slot == _slot:
+		_sync_slot_buttons()
+		return
+	# 저장 안 한 편집이 있으면 먼저 물어본다. 안 그러면 그림이 말없이 사라진다.
+	if _dirty:
+		_pending_slot = slot
+		_sync_slot_buttons()   # 아직 안 옮겼으니 버튼은 원래 슬롯에 둔다
+		_confirm.dialog_text = "저장하지 않은 편집이 있습니다.\n%s 슬롯으로 옮기면 사라집니다." % slot
+		_confirm.popup_centered()
+		return
 	_load_slot(slot)
+
+
+func _on_confirm_discard() -> void:
+	if _pending_slot.is_empty():
+		return
+	var slot := _pending_slot
+	_pending_slot = ""
+	_load_slot(slot)
+
+
+func _on_confirm_cancel() -> void:
+	_pending_slot = ""
+	_sync_slot_buttons()
+
+
+func _sync_slot_buttons() -> void:
+	for s in _slot_buttons:
+		(_slot_buttons[s] as Button).button_pressed = (s == _slot)
+
+
+## 편집이 생겼다는 표시. 불러오는 중에는 세지 않는다.
+func _touch() -> void:
+	if _loading:
+		return
+	_dirty = true
+	_mark_save_button()
+
+
+## 저장 안 한 게 있으면 버튼에 티를 낸다. 창을 닫아도 편집은 사라지므로
+## 슬롯 전환 확인창만으로는 부족하다.
+func _mark_save_button() -> void:
+	if _save_btn == null:
+		return
+	_save_btn.text = "저장 ●" if _dirty else "저장"
 
 
 func _load_slot(slot: String) -> void:
 	_slot = slot
-	for s in _slot_buttons:
-		(_slot_buttons[s] as Button).button_pressed = (s == slot)
+	# 불러오는 동안 일어나는 값 변경은 "유저의 편집"이 아니다.
+	_loading = true
+	_sync_slot_buttons()
 
 	var skill: Dictionary = SkillDB.get_slot(slot)
 	if skill.is_empty():
@@ -292,6 +361,9 @@ func _load_slot(slot: String) -> void:
 	_canvas.ink = _color_pick.color
 	_canvas.queue_redraw()
 	_refresh()
+	_loading = false
+	_dirty = false
+	_mark_save_button()
 
 
 func _save() -> void:
@@ -305,6 +377,8 @@ func _save() -> void:
 		_damage.value,
 		_range.value,
 	))
+	_dirty = false
+	_mark_save_button()
 	_cost_label.text = "저장됨 — %s 슬롯" % _slot
 
 
@@ -321,8 +395,10 @@ func _refresh() -> void:
 	var tag: String = Balance.tag_from_metrics(metrics)
 
 	# 아래 수치는 **실제 전투에 쓰이는 값**이다. 그린 태그가 그대로 전투에 들어간다.
+	# 지표(metrics)를 반드시 함께 넘긴다 — 안 넘기면 태그 기본값으로 계산돼
+	# 화면과 실제 발사가 어긋난다. Player 도 같은 지표를 넘긴다.
 	var combat_tag: String = tag
-	var d: Dictionary = Balance.derive(_damage.value, _range.value, combat_tag)
+	var d: Dictionary = Balance.derive(_damage.value, _range.value, combat_tag, metrics)
 
 	_tag_label.text = "형태: %s" % tag
 
@@ -342,10 +418,15 @@ func _refresh() -> void:
 		"쿨타임        %.1f 초" % float(d["cooldown"]),
 		"발동 시간     %.2f 초" % float(d["cast_time"]),
 		"투사체 속도   %.1f m/s" % float(d["speed"]),
-		"사거리        %.1f m" % float(d["distance"]),
-		"판정 면적     %.2f m²" % float(d["total_area"]),
+		# `distance` 는 이제 「투사체가 실제로 나는 거리」다. 유저가 알고 싶은 건
+		# **어디까지 닿느냐**(`reach`) 이고, 캡슐은 판정이 앞으로 뻗어 있어서 둘이 다르다.
+		# `distance` 를 띄우면 길쭉함만 사거리가 짧아 보인다.
+		"사거리        %.1f m" % float(d["reach"]),
+		"유효 명중 폭  %.2f m" % float(d["effective_width"]),
 		"히트박스      %s" % _describe_box(box),
-		"한 방 데미지  %.1f" % Balance.damage_per_hit(_damage.value, combat_tag),
+		"전탄 명중     %s" % _describe_full_hit(box, float(d["reach"])),
+		"한 방 데미지  %.1f" % Balance.damage_per_hit(
+			_damage.value, combat_tag, int(box.get("pellets", 0))),
 		"",
 		"[i]그림 지표 — 채움 %.2f · 종횡 %.2f · 복잡 %.2f · 덩어리 %d[/i]" % [
 			float(metrics["fill_ratio"]), float(metrics["aspect"]),
@@ -355,13 +436,52 @@ func _refresh() -> void:
 	_stat_label.text = "\n".join(lines)
 
 
+## 여러 발로 나가는 태그는 멀어지면 바깥 탄부터 빗나가 데미지가 계단식으로 떨어진다.
+## 그 경계가 어디인지 안 보여주면 유저는 "왜 멀리서는 약하지?" 를 영영 알 수 없다.
+## (기획서 87행 — 유저가 예측 가능하게 한다)
+func _describe_full_hit(box: Dictionary, distance: float) -> String:
+	var pellets := int(box.get("pellets", 1))
+	if pellets <= 1:
+		return "사거리 전체 (단발)"
+
+	var keep: float = Balance.full_hit_distance(
+		float(box.get("pellet_radius", 0.0)), _spread_of(box))
+	if is_inf(keep) or keep >= distance:
+		return "사거리 전체 (%.1fm)" % distance
+	return "%.1fm 까지 — 그 뒤로는 일부만 맞는다 (사거리 %.1fm)" % [keep, distance]
+
+
+## 이 히트박스가 실제로 퍼지는 각도(도).
+## `hitbox_for` 가 흩어짐에는 `angle_deg` 를 안 채운다. 그걸 그대로 믿으면 0° →
+## `full_hit_distance` 가 INF → 화면에 "사거리 전체" 라고 뜬다. 실제로는 8.6m 부터
+## 3발, 16.9m 부터 1발만 맞는데도. (QA N1 — 위반 4가 흩어짐에서 재발한 자리다)
+func _spread_of(box: Dictionary) -> float:
+	var angle := float(box.get("angle_deg", 0.0))
+	if angle > 0.0:
+		return angle
+	match String(box.get("kind", "sphere")):
+		"scatter":
+			return Balance.SCATTER_SPREAD_DEG
+		"cone":
+			return Balance.CONE_SPREAD_DEG
+		_:
+			return 0.0
+
+
 func _describe_box(box: Dictionary) -> String:
 	match String(box["kind"]):
 		"capsule":
 			return "캡슐 길이 %.1fm 폭 %.2fm" % [float(box["length"]), float(box["width"])]
 		"cone":
-			return "부채꼴 %d° — 작은 탄 %d발" % [int(box["angle_deg"]), int(box.get("pellets", 3))]
+			# `angle_deg` 는 이제 실제로 쏘는 퍼짐각과 같은 값이다.
+			# (예전엔 판정각 90° 를 띄우면서 실제로는 11° 로 쏴 화면이 거짓말을 했다)
+			return "부채꼴 %.0f° · 작은 탄 %d발" % [
+				float(box.get("angle_deg", Balance.CONE_SPREAD_DEG)),
+				int(box.get("pellets", Balance.CONE_PELLETS))]
 		"scatter":
-			return "산탄 %d발 반경 %.2fm" % [int(box["pellets"]), float(box["pellet_radius"])]
+			# 퍼짐각을 상수로 띄우면 안 된다. 탄 수에 따라 18/24/27° 로 갈리므로
+			# 상수를 띄우는 순간 화면이 틀린 값을 말하게 된다. 부채꼴과 같은 규칙이다.
+			return "산탄 %d발 · 반경 %.2fm · 퍼짐 %.0f°" % [
+				int(box["pellets"]), float(box["pellet_radius"]), _spread_of(box)]
 		_:
 			return "구 반경 %.1fm" % float(box["radius"])
