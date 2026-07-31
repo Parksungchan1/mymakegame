@@ -244,6 +244,7 @@
             <option value="developer">개발</option>
             <option value="designer">아트</option>
             <option value="qa">QA</option>
+            <option value="auditor">감시자</option>
           </select>
           <label class="chk"><input type="checkbox" id="full" /> 모든 권한 허용</label>
           <div class="spacer" style="flex:1"></div>
@@ -302,9 +303,12 @@
 //  데이터가 없으면 "없음"이라고 쓴다. 그럴듯한 값을 지어내지 않는다.
 // ============================================================
 
-/** 자리 배치 — 대표실 1 + 책상 6 (%) */
+/** 자리 배치 — 대표실 1 + 책상 7 (%)
+ *  감시자만 3×2 책상 묶음에서 떨어져 위쪽에 앉는다.
+ *  다른 담당의 결과물을 검사하는 자리라 섞이지 않는 게 맞다. */
 const SEATS = {
   ceo:            { x: 50, y: 11 },
+  "auditor":      { x: 84, y: 15 },
   "pm":           { x: 17, y: 45 },
   "coordinator":  { x: 50, y: 45 },
   "game-designer":{ x: 83, y: 45 },
@@ -322,8 +326,9 @@ const LOOK = {
   "developer":     { hair: "#2c2638", shirt: "#ff8fc0", label: "개발" },
   "designer":      { hair: "#d88d68", shirt: "#c9b8ff", label: "아트" },
   "qa":            { hair: "#2d4b46", shirt: "#b8f0dd", label: "QA" },
+  "auditor":       { hair: "#4a4a3a", shirt: "#ffd88f", label: "감시" },
 };
-const ORDER = ["pm", "coordinator", "game-designer", "developer", "designer", "qa"];
+const ORDER = ["pm", "coordinator", "game-designer", "developer", "designer", "qa", "auditor"];
 
 const floor = document.getElementById("floor");
 const people = {};   // id -> { el, bubbleEl, busy }

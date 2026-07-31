@@ -59,11 +59,15 @@ Windows 에서 한글을 명령줄 인자로 넘기면 Node 가 시스템 코드
 `???` 로 깨진다. 프롬프트는 `child.stdin` 으로, git 커밋 메시지는 UTF-8 파일 + `-F` 로 넘긴다.
 이건 이미 두 번 겪은 문제다. 인자로 바꾸지 말 것.
 
-## 담당자 6명
+## 담당자 7명
 
 `.claude/agents/<id>.md` 에 실제로 존재하는 에이전트만 올린다. 없는 사람은 만들지 않는다.
 
-`pm` · `coordinator` · `game-designer` · `developer` · `designer` · `qa`
+`pm` · `coordinator` · `game-designer` · `developer` · `designer` · `qa` · `auditor`
+
+`auditor`(감시자)는 나중에 합류해서 한동안 개발실이 모르고 있었다. `[감시]` 태그를 단 커밋이
+담당자 없이 뜨던 이유다. 새 에이전트를 추가하면 **여기 · `TAG_TO_AGENT` · `AGENT_TO_TAG` ·
+`ui/index.html` 의 `SEATS`/`LOOK`/`ORDER`/담당자 select** 다섯 군데를 같이 고쳐야 한다.
 
 커밋 메시지 앞의 `[역할]` 태그로 담당자를 찾는다 (`server/project-api.mjs` 의 `TAG_TO_AGENT`).
 새 태그를 쓰기 시작하면 그 표에 추가해야 화면에 담당자가 뜬다.

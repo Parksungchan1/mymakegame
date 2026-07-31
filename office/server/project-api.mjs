@@ -43,11 +43,14 @@ const TAG_TO_AGENT = {
   qa: "qa",
   QA: "qa",
   검증: "qa",
+  감시: "auditor",
+  감시자: "auditor",
+  감사: "auditor",
   개발실: "pm",
   도구: "pm",
 };
 
-const AGENTS = ["pm", "coordinator", "game-designer", "developer", "qa", "designer"];
+const AGENTS = ["pm", "coordinator", "game-designer", "developer", "qa", "designer", "auditor"];
 
 /** 담당자 → 커밋 메시지에 붙일 태그. TAG_TO_AGENT 로 되읽을 수 있어야 한다. */
 const AGENT_TO_TAG = {
@@ -57,6 +60,7 @@ const AGENT_TO_TAG = {
   developer: "개발",
   designer: "아트",
   qa: "QA",
+  auditor: "감시",
 };
 
 /** git 명령 실행. 실패해도 서버가 죽지 않게 null 을 돌려준다. */
