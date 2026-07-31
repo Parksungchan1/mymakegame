@@ -45,7 +45,32 @@ const TAG_SHARP := "뾰족함"
 const TAG_SCATTER := "흩어짐"
 
 ## 태그 판정 임계값 — 기획 담당 조정 지점
-const T_ASPECT_LONG: float = 2.5      ## 종횡비 이 이상이면 길쭉함
+
+## 【2026-08-01 [D-1] 개정 — 이름이 `T_ASPECT_LONG` 에서 바뀌었다】
+## **신장도(회전 불변)가 이 값 이상이면 길쭉함.** 종전에는 축에 나란한 바운딩박스의
+## 가로/세로(`aspect`)를 이 문턱과 비교했는데, 그래서 같은 막대를 기울이면 태그가 바뀌었다
+## (QA 4차 6장 실측: 전 각도의 55~73%가 오판 구간, 조준 데미지 1.84~2.44배 손해).
+##
+## 【값을 2.5 그대로 둔 근거 — 지표가 바뀌었는데도 문턱 숫자를 안 바꾼 이유】
+## **축에 나란한 꽉 찬 직사각형에서는 신장도 = 가로/세로 픽셀 수와 정확히 같다.**
+##   [증명] 폭 w 픽셀에 고르게 퍼진 픽셀 중심의 분산은 (w²−1)/12 이고, 픽셀 폭 보정 +1/12 를
+##   더하면 정확히 w²/12 다. 세로도 같으므로 √(l1/l2) = √((w²/12)/(h²/12)) = w/h.
+##   [실측] 직사각 16×8 → 2.000 · 16×6 → 2.667 · 기본 스킬 W 막대 6×32 → 5.333. 오차 0.
+## → 「2.5:1 보다 길면 길쭉함」이라는 **문턱의 뜻이 한 글자도 안 바뀐다.** 기획서 형태 태그
+##   표의 숫자도 그대로 쓸 수 있고, 기본 스킬 4개 태그도 안 움직인다(전부 검산 완료).
+##
+## 【안 새는 쪽 여유 — 길쭉함이 아닌 그림이 넘어오지 않는가】
+##   십자 5종 · 별 10종을 0~90° 0.5° 로 돌린 전수 스캔에서 신장도 최댓값 **1.11** (여유 2.25배)
+##   손떨림 원 **1,280 조합** 신장도 최댓값 **1.774** (여유 1.41배) · 길쭉함으로 샌 것 **0건**
+## 【잡히는 쪽 여유 — 길쭉한 그림을 놓치지 않는가】
+##   QA 4차가 쓴 막대 8종 0~90° 0.5° 전수: 신장도 최솟값 **4.16** (여유 1.7배)
+##   손떨림 브러시 획 285 조합(길이 14~28 · 굵기 2~4): 최솟값 **2.99** (여유 1.2배)
+## 【다른 문턱을 버린 이유】
+##   2.2 → 타원 12:5(신장 2.32)가 길쭉함이 되어 **현행 동작이 바뀐다.** 손떨림 원과의 여유도
+##         1.41배 → 1.24배로 준다.
+##   2.8 / 3.0 → 길쭉함에서 밀려난 막대가 복잡도 판정으로 넘어가 **둥긂↔뾰족함 흔들림이
+##         50 → 69 → 75 조합으로 늘어난다**(막대 235조합 회전 전수 스캔).
+const T_ELONGATION_LONG: float = 2.5  ## 신장도 이 이상이면 길쭉함 (회전 불변)
 const T_COMPLEXITY_SHARP: float = 2.5 ## 둘레²/(4π·면적). 1.0=완전한 원
 ## 뾰족함은 복잡도만으로 판정하지 않는다. 채움률이 이보다 낮아야 한다.
 ## 이유: 복잡도는 둘레를 제곱해서 손떨림에 2차로 반응한다. 손으로 그린 원은
@@ -246,11 +271,14 @@ const LONG_WIDTH_MIN: float = 0.22
 #   ⛔ 둥긂 관통        — 새 메커니즘. 사용자 확인 대기(변동 없음)
 # ─────────────────────────────────────────────────────────────
 
-## 길쭉함: 종횡비(또는 회전 불변 신장도)가 T_ASPECT_LONG → 이 값으로 갈수록
+## 길쭉함: **신장도**가 T_ELONGATION_LONG → 이 값으로 갈수록
 ## LONG_LEN_RATIO 가 MIN → MAX 로 움직인다. **배선 보류 중**(위 판정 참조).
 ## MIN 은 현행값과 같게, MAX 는 길이 상한이 확실히 먼저 걸리는 값으로 잡았다
 ## (범위 50 에서 3.0 은 8.56m 를 요구하지만 사거리 30% 상한 6.30m 에서 잘린다).
-const T_ASPECT_LONG_FULL: float = 8.0
+## 【2026-08-01 [D-1]】 이름이 `T_ASPECT_LONG_FULL` 에서 바뀌었다. 8.0 은 신장도 기준으로도
+## 같은 뜻이다 — 축에 나란한 직사각형에서 신장도 = 가로/세로이므로 「8:1 이면 최대」다.
+## 배선할 때 종전 초안의 `max(신장도, 1/신장도)` 는 **쓰지 마라.** 신장도는 정의상 항상 ≥ 1 이다.
+const T_ELONGATION_LONG_FULL: float = 8.0
 const LONG_LEN_RATIO_MIN: float = 1.8   ## 현행과 같은 캡슐 (길이:폭 = 1.8:1)
 const LONG_LEN_RATIO_MAX: float = 3.0   ## 상한에 걸려 실제로는 2.0~2.3:1 에서 잘린다
 
@@ -332,17 +360,34 @@ const PIERCE_MAX: int = 2
 # ─────────────────────────────────────────────────────────────
 
 ## mask: GRID*GRID 길이, 0=빈칸 / 1=칠함.
-## 반환: {filled, fill_ratio, aspect, complexity, blobs}
+## 반환: {filled, fill_ratio, aspect, elongation, complexity, blobs}
+##
+## ⚠ **2026-08-01 [D-1]+[S3] 개정 — 개발이 알아야 할 두 가지가 있다.**
+##  (1) **새 키 `elongation`(신장도)이 생겼고, 태그 판정은 이제 그걸 쓴다.**
+##      `aspect`(바운딩박스 가로/세로)는 **뜻도 이름도 그대로** 남아 있다. 화면이 「종횡」으로
+##      띄우는 값이라 뜻을 바꾸면 화면이 조용히 거짓말한다 — 그래서 교체가 아니라 **추가**다.
+##      다만 이제 `aspect` 만 봐서는 태그를 예측할 수 없다(대각선 막대는 종횡 1.00 · 신장 11.7).
+##      → 제작창 지표 줄에 **신장도 표시를 같이 넣어 달라.** `reports/game-designer.md` 개발 요청 참조.
+##  (2) **지표를 노이즈 제거 후 마스크에서 잰다.** 종전에는 `blobs` 만 작은 덩어리를 버리고
+##      `filled`/`fill_ratio`/`aspect`/`complexity` 는 버린 픽셀까지 세어, 구석에 1픽셀만 찍어도
+##      태그를 고를 수 있었다(QA S3, 네 번 미이행). 이제 다섯 지표가 **같은 그림**을 본다.
+##      → 잡픽셀이 섞인 그림에서는 `aspect`·`fill_ratio`·`filled`·`complexity` **값이 달라진다.**
+##      (예: 원 r6 + 좌우 끝 1픽셀 → 종횡 2.50 → **1.00**, 태그 길쭉함 → **둥긂**)
+##      투사체 스프라이트는 원본 마스크를 그대로 쓰므로 잡픽셀도 **보이기는 한다** — 판정에만 안 쓴다.
 func analyze_mask(mask: PackedByteArray) -> Dictionary:
 	var out := {
 		"filled": 0,
 		"fill_ratio": 0.0,
 		"aspect": 1.0,
+		"elongation": 1.0,
 		"complexity": 1.0,
 		"blobs": 0,
 	}
 	if mask.size() < GRID * GRID:
 		return out
+
+	# 노이즈를 먼저 턴다. 아래 지표는 전부 이 `src` 만 본다.
+	var src := _denoised(mask)
 
 	var min_x := GRID
 	var min_y := GRID
@@ -351,7 +396,7 @@ func analyze_mask(mask: PackedByteArray) -> Dictionary:
 	var filled := 0
 	for y in GRID:
 		for x in GRID:
-			if mask[y * GRID + x] == 0:
+			if src[y * GRID + x] == 0:
 				continue
 			filled += 1
 			min_x = mini(min_x, x)
@@ -366,8 +411,108 @@ func analyze_mask(mask: PackedByteArray) -> Dictionary:
 	out["filled"] = filled
 	out["fill_ratio"] = float(filled) / (bw * bh)
 	out["aspect"] = bw / bh
-	out["complexity"] = _complexity(mask, filled)
-	out["blobs"] = _count_blobs(mask)
+	out["elongation"] = _elongation(src)
+	out["complexity"] = _complexity(src, filled)
+	out["blobs"] = _count_blobs(src)
+	return out
+
+
+## 【2026-08-01 신설 · [D-1]】 **신장도 — 회전에 안 흔들리는 「길쭉함」의 자.**
+##
+## 칠한 픽셀 분포의 2차 모멘트(공분산) 고유값 비다. `sqrt(l1/l2)`, 항상 ≥ 1.0.
+## 1.0 = 완전 등방(원·정사각형·십자·별), 클수록 한 방향으로 길다.
+## **좌표축을 어디로 잡든 값이 같다** — 회전은 공분산 행렬을 닮음변환할 뿐 고유값을 안 바꾼다.
+## 그래서 같은 그림을 기울여도 태그가 안 바뀐다. 이것이 종전 `aspect`(축에 나란한 바운딩박스
+## 가로/세로)와의 유일하지만 결정적인 차이다 — `aspect` 는 45° 막대에서 1.00 이 된다.
+##
+## `+ 1.0/12.0` 은 픽셀 폭 보정이다. 픽셀을 점이 아니라 한 변 1 짜리 정사각형으로 보고
+## 그 자체 분산(1/12)을 더한다. 두 가지를 동시에 해결한다:
+##   · 두께 1픽셀 선에서 l2 = 0 이 되어 0 으로 나누는 것을 막는다
+##   · 꽉 찬 직사각형에서 **신장도 = 가로/세로 픽셀 수**가 정확히 성립하게 만든다
+##     (폭 w 픽셀의 이산 분산 (w²−1)/12 + 1/12 = w²/12) → 문턱 2.5 의 뜻이 안 바뀐다
+##
+## [실측] 26×2 막대를 0~90° 로 0.5° 씩 돌린 181 지점에서 신장도 10.83~13.05.
+## 같은 막대의 `aspect` 는 13.00 → 1.00 → 0.08 로 널뛴다.
+func _elongation(mask: PackedByteArray) -> float:
+	var n := 0
+	var sum_x := 0.0
+	var sum_y := 0.0
+	for y in GRID:
+		for x in GRID:
+			if mask[y * GRID + x] == 0:
+				continue
+			n += 1
+			sum_x += float(x)
+			sum_y += float(y)
+	if n <= 0:
+		return 1.0
+	var mean_x := sum_x / float(n)
+	var mean_y := sum_y / float(n)
+
+	var sxx := 0.0
+	var syy := 0.0
+	var sxy := 0.0
+	for y in GRID:
+		for x in GRID:
+			if mask[y * GRID + x] == 0:
+				continue
+			var dx := float(x) - mean_x
+			var dy := float(y) - mean_y
+			sxx += dx * dx
+			syy += dy * dy
+			sxy += dx * dy
+	# 픽셀 폭 보정(위 주석 참조)
+	sxx = sxx / float(n) + 1.0 / 12.0
+	syy = syy / float(n) + 1.0 / 12.0
+	sxy = sxy / float(n)
+
+	var tr := sxx + syy
+	var det := sxx * syy - sxy * sxy
+	var root: float = sqrt(maxf(tr * tr * 0.25 - det, 0.0))
+	var l1: float = tr * 0.5 + root
+	var l2: float = maxf(tr * 0.5 - root, 1e-9)
+	return sqrt(l1 / l2)
+
+
+## 【2026-08-01 신설 · QA [S3] 해소】 노이즈(T_MIN_BLOB_PIXELS 미만 덩어리) 픽셀을 지운 마스크.
+## `_count_blobs` 가 이미 쓰던 「작은 덩어리는 그림이 아니다」라는 판단을 **나머지 지표에도
+## 똑같이 적용**하는 것뿐이다. 새 규칙이 아니라 기존 규칙을 일관되게 만드는 것이다.
+##
+## [실측] 원 r3 + 구석에 1픽셀 2개 → 노이즈 제거 전 신장도 3.55(길쭉함 오판) / 제거 후 1.00(둥긂).
+##   ⚠ 노이즈 제거가 없으면 **신장도 전환이 오히려 이 구멍을 넓힌다** — 바운딩박스는 잡픽셀에
+##   비례해서 커지지만 2차 모멘트는 **거리의 제곱**으로 반응하기 때문이다. 두 조치는 세트다.
+## ⚠ **남은 구멍**: 4픽셀짜리 점(2×2)은 T_MIN_BLOB_PIXELS 기준으로 「진짜 덩어리」라
+##   여전히 덩어리 수를 늘려 흩어짐이 된다. 그건 이 함수가 아니라 T_MIN_BLOB_PIXELS 값의
+##   문제이고, 값을 올리면 흩어짐 탄 수 매핑을 다시 검산해야 해서 이번 개정에 넣지 않았다.
+func _denoised(mask: PackedByteArray) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(GRID * GRID)
+	var seen := PackedByteArray()
+	seen.resize(GRID * GRID)
+	for start in GRID * GRID:
+		if mask[start] == 0 or seen[start] == 1:
+			continue
+		var comp: Array[int] = []
+		var stack: Array[int] = [start]
+		seen[start] = 1
+		while not stack.is_empty():
+			var i: int = stack.pop_back()
+			comp.append(i)
+			var x := i % GRID
+			@warning_ignore("integer_division")
+			var y := i / GRID
+			for d in NEIGHBORS:
+				var nx: int = x + d.x
+				var ny: int = y + d.y
+				if nx < 0 or ny < 0 or nx >= GRID or ny >= GRID:
+					continue
+				var ni: int = ny * GRID + nx
+				if mask[ni] == 1 and seen[ni] == 0:
+					seen[ni] = 1
+					stack.append(ni)
+		if comp.size() >= T_MIN_BLOB_PIXELS:
+			for i in comp:
+				out[i] = 1
 	return out
 
 
@@ -452,8 +597,13 @@ func tag_from_metrics(m: Dictionary) -> String:
 		return TAG_ROUND
 	if int(m.get("blobs", 0)) >= 2:
 		return TAG_SCATTER
-	var aspect := float(m.get("aspect", 1.0))
-	if aspect >= T_ASPECT_LONG or aspect <= 1.0 / T_ASPECT_LONG:
+	# 【2026-08-01 [D-1]】 종전에는 `aspect`(축에 나란한 바운딩박스 가로/세로)를 봤다.
+	# 그래서 같은 막대를 기울이면 태그가 바뀌었다 — 45° 에서 aspect 는 1.00 이 된다.
+	# 이제 **회전 불변**인 `elongation` 을 본다. 항상 ≥ 1.0 이라 종전의 역수 검사
+	# (`aspect <= 1/2.5`, 세로로 긴 그림을 잡던 갈래)는 **필요 없어졌다** — 세로로 긴 그림도
+	# 신장도는 똑같이 크게 나온다(가로 막대 6×32 = 5.333, 세로로 눕혀도 5.333).
+	# 지표가 없는 Dictionary 를 손으로 넘긴 경우엔 1.0 = 등방으로 본다(= 길쭉함이 아니다).
+	if float(m.get("elongation", 1.0)) >= T_ELONGATION_LONG:
 		return TAG_LONG
 	# 뾰족함은 **복잡도 + 채움률 두 조건을 모두** 만족해야 한다.
 	# 복잡도 하나로만 보면 손으로 그린 원이 전부 뾰족함으로 넘어간다(T_FILL_SHARP 주석 참고).
@@ -623,7 +773,10 @@ func hitbox_for(tag: String, total_area: float, distance: float = 0.0,
 			var width: float = maxf(w, LONG_WIDTH_MIN)
 			var ratio: float = LONG_LEN_RATIO
 			# ⛔ 신장도 → ratio 배선은 아직 보류다(위 미세 파라미터 블록 참조).
-			#    풀 때는 여기서 LONG_LEN_RATIO_MIN/MAX 를 lerp 하면 된다.
+			#    풀 때는 여기서 LONG_LEN_RATIO_MIN/MAX 를 lerp 하면 된다:
+			#      t = clamp((m["elongation"] - T_ELONGATION_LONG)
+			#                / (T_ELONGATION_LONG_FULL - T_ELONGATION_LONG), 0, 1)
+			#    (`elongation` 은 항상 ≥ 1 이므로 옛 초안의 `max(v, 1/v)` 는 쓰지 마라)
 			var length: float = ratio * width
 			var cap: float = LONG_LENGTH_MAX_ABS
 			if distance > 0.0:
