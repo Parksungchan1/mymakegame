@@ -64,13 +64,11 @@ func open() -> void:
 	_load_slot(_slot)
 	visible = true
 	get_tree().paused = true
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func close() -> void:
 	visible = false
 	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 # ─────────────────────────────────────────────────────────────

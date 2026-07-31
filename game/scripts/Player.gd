@@ -24,45 +24,31 @@ extends CharacterBody3D
 ## 진행 방향으로 몸이 도는 속도
 @export var turn_speed: float = 14.0
 
-# ── 카메라 (뒤에서 따라오는 3인칭) ─────────────────────────────
-@export var mouse_sens: float = 0.0028
-@export var pitch_min_deg: float = -50.0
-@export var pitch_max_deg: float = 20.0
-@export var cam_distance: float = 5.0
+# ── 카메라 (고정각 3인칭) ─────────────────────────────────────
+## 사용자 확정(2026-07-31): 카메라는 **고정 각도**다.
+## 마우스로 시점을 돌리지 않는다. 화면이 도는 일이 없으니
+## 방향키 ↑는 언제나 화면 위쪽이고, 맵 방향 감각이 흔들리지 않는다.
+## 각도를 바꾸고 싶으면 아래 두 값만 손보면 된다.
+@export_range(-180.0, 180.0) var cam_yaw_deg: float = 0.0
+@export_range(-80.0, 0.0) var cam_pitch_deg: float = -32.0
+@export var cam_distance: float = 7.0
 
-@onready var _yaw: Node3D = $CamYaw
-@onready var _arm: SpringArm3D = $CamYaw/SpringArm3D
+@onready var _pivot: Node3D = $CamPivot
+@onready var _arm: SpringArm3D = $CamPivot/SpringArm3D
 @onready var _body: Node3D = $Body
-
-## 카메라 상하 각(라디안)
-var _pitch: float = -0.25
 
 
 func _ready() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# 시점 조작이 없으니 마우스는 잡지 않는다. 스킬 제작창에서 그대로 쓴다.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_apply_camera_angle()
+
+
+## 고정각을 실제 노드에 반영. 인스펙터에서 값을 바꿔도 다시 부르면 된다.
+func _apply_camera_angle() -> void:
+	_pivot.rotation.y = deg_to_rad(cam_yaw_deg)
+	_arm.rotation.x = deg_to_rad(cam_pitch_deg)
 	_arm.spring_length = cam_distance
-	_arm.rotation.x = _pitch
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	# ESC 로 마우스를 풀어준다(스킬 제작창을 쓰거나 창 밖으로 나갈 때)
-	if event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		return
-	# 화면을 다시 클릭하면 재캡처
-	if event is InputEventMouseButton and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		return
-
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var mm := event as InputEventMouseMotion
-		_yaw.rotate_y(-mm.relative.x * mouse_sens)
-		_pitch = clampf(
-			_pitch - mm.relative.y * mouse_sens,
-			deg_to_rad(pitch_min_deg),
-			deg_to_rad(pitch_max_deg),
-		)
-		_arm.rotation.x = _pitch
 
 
 func _physics_process(delta: float) -> void:
@@ -70,9 +56,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _move(delta: float) -> void:
-	# 방향키 → 카메라가 보는 방향 기준의 이동 벡터
+	# 방향키 → 화면 기준 이동. 카메라가 고정각이라 이 기준은 절대 안 바뀐다.
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var basis := _yaw.global_transform.basis
+	var basis := _pivot.global_transform.basis
 	var dir := (basis.x * input_dir.x + basis.z * input_dir.y)
 	dir.y = 0.0
 	if dir.length_squared() > 0.0:
