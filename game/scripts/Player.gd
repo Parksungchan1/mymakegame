@@ -33,17 +33,20 @@ extends CharacterBody3D
 @export_range(-80.0, 0.0) var cam_pitch_deg: float = -32.0
 @export var cam_distance: float = 7.0
 
-# ── 스킬 (로드맵 3a: 에디터의 수치가 실제 발사에 반영) ────────
-## 2단계에서는 수치를 여기 직접 박아뒀지만, 3a 부터는 **에디터에서 정한 수치**를 쓴다.
-## Tab 으로 제작창을 열어 데미지·범위 슬라이더를 바꾸고 저장하면 바로 반영된다.
+# ── 스킬 (로드맵 3b: 그린 그림이 그대로 날아간다) ────────────
+## Tab 으로 제작창을 열어 **그림을 그리고** 데미지·범위를 정한 뒤 저장하면
+## 그 그림이 그대로 투사체가 되어 날아간다. 이 게임의 심장이다.
 ##
-## 아직 **수치만** 가져온다. 그림은 안 쓴다.
-## 그래서 형태 태그는 무조건 기본값 "둥긂"이다 — 어떤 그림을 그려도 구체가 날아간다.
-## 그림을 겉모습·형태 태그로 쓰는 건 3b 다. 기획서 87~88행이 3a → 3b 순서를 못박았다.
+## 그림이 정하는 것: 겉모습 + 형태 태그(길쭉함/둥긂/뾰족함/흩어짐)
+## 수치가 정하는 것: 세기 — 데미지·범위. 총 판정 면적은 범위 값으로 정규화된다.
+## 그래서 어떤 그림을 그려도 같은 범위면 총 면적이 같다. 그림으로 세지게 만들 수 없다.
 const PROJECTILE := preload("res://scripts/skill/Projectile.gd")
 
-## 읽어올 슬롯. 3a 는 Q 하나만 쓴다. QWER 4슬롯은 로드맵 4단계다.
+## 읽어올 슬롯. 지금은 Q 하나만 쓴다. QWER 4슬롯은 로드맵 4단계다.
 const SKILL_SLOT := "Q"
+
+## 투사체가 바닥에서 최소한 이만큼은 떠서 태어나야 한다(판정 반경 위에 더한다).
+const GROUND_CLEARANCE := 0.08
 
 ## SkillDB 슬롯이 비었을 때만 쓰는 값(저장 파일이 아직 없는 첫 실행 등)
 @export var fallback_skill_name: String = "불꽃탄"
@@ -61,6 +64,8 @@ var skill_name: String = ""
 var skill_damage: float = 0.0
 var skill_range_pt: float = 0.0
 var skill_color: Color = Color.WHITE
+var skill_mask: PackedByteArray = PackedByteArray()
+var skill_tag: String = ""
 
 ## 쿨타임·발동시간·투사체 속도·판정 크기 — 전부 Balance 가 정한다.
 var _skill: Dictionary = {}
@@ -83,7 +88,7 @@ func _on_slot_changed(slot: String) -> void:
 		_reload_skill()
 
 
-## SkillDB → 지금 들고 있는 스킬. 그림(mask)과 저장된 태그는 일부러 읽지 않는다(3b).
+## SkillDB → 지금 들고 있는 스킬. 그림·형태 태그까지 전부 읽는다.
 func _reload_skill() -> void:
 	var s: Dictionary = SkillDB.get_slot(SKILL_SLOT)
 	if s.is_empty():
@@ -91,12 +96,18 @@ func _reload_skill() -> void:
 		skill_damage = fallback_damage
 		skill_range_pt = fallback_range_pt
 		skill_color = fallback_color
+		skill_mask = PackedByteArray()
+		skill_tag = Balance.TAG_ROUND
 	else:
 		skill_name = String(s["name"])
 		skill_damage = float(s["damage"])
 		skill_range_pt = float(s["range_pt"])
 		skill_color = s["color"]
-	_skill = Balance.derive(skill_damage, skill_range_pt, Balance.TAG_ROUND)
+		skill_mask = s["mask"]
+		# 저장된 태그를 믿지 않고 그림에서 다시 뽑는다.
+		# 기획 담당이 판정 임계값을 바꾸면 저장된 스킬에도 바로 반영돼야 한다.
+		skill_tag = Balance.tag_from_mask(skill_mask)
+	_skill = Balance.derive(skill_damage, skill_range_pt, skill_tag)
 
 
 ## 고정각을 실제 노드에 반영. 인스펙터에서 값을 바꿔도 다시 부르면 된다.
@@ -178,26 +189,90 @@ func _tick_skill(delta: float) -> void:
 
 	if _cooldown_left <= 0.0 and Input.is_action_just_pressed("skill_q"):
 		_casting = true
-		_cast_left = float(_skill.get("cast_time", 0.3))
+		# NaN 이 들어오면 어떤 비교도 false 라 _casting 이 영영 안 풀리고
+		# 스킬이 완전히 잠긴다. 망가진 값은 여기서 걸러낸다.
+		_cast_left = _safe_time(_skill.get("cast_time", 0.3), 0.3)
 
 
+## 시간 값이 NaN·무한대·음수면 기본값으로 되돌린다.
+func _safe_time(value: Variant, fallback: float) -> float:
+	var v := float(value)
+	if is_nan(v) or is_inf(v) or v < 0.0:
+		return fallback
+	return v
+
+
+## 형태 태그에 따라 한 발 또는 여러 발을 뿌린다.
+## 나누는 건 여기 일이고, 투사체는 "한 발"만 안다.
+## 발 수와 한 발 데미지는 Balance 가 정한 것을 그대로 따른다 —
+## 여기서 발 수를 바꾸면 총 데미지가 어긋난다.
 func _shoot() -> void:
-	var shot := PROJECTILE.new()
-	shot.configure(
-		aim_direction(),
-		_skill,
-		Balance.damage_per_hit(skill_damage, Balance.TAG_ROUND),
-		skill_color,
-	)
+	var dir := aim_direction()
+	var box: Dictionary = _skill.get("hitbox", {})
+	var kind := String(box.get("kind", "sphere"))
+	var dmg: float = Balance.damage_per_hit(skill_damage, skill_tag)
+
+	match kind:
+		"scatter":
+			# 산탄 다발 — 작은 탄이 좁게 퍼진다
+			_spawn_spread(dir, int(box.get("pellets", 5)),
+				Balance.SCATTER_SPREAD_DEG, float(box.get("pellet_radius", 0.3)), dmg)
+		"cone":
+			# 부채꼴 다단 히트 — 작은 탄을 부챗살로 뿌린다.
+			# 퍼짐각에 히트박스의 angle_deg(판정 각 90°)를 쓰면 안 된다.
+			# 그러면 10m 앞에서 바깥 탄이 10m 옆으로 날아가 사실상 안 맞는다.
+			_spawn_spread(dir, int(box.get("pellets", Balance.CONE_PELLETS)),
+				Balance.CONE_SPREAD_DEG, float(box.get("pellet_radius", 0.3)), dmg)
+		_:
+			# 둥긂(구) · 길쭉함(캡슐) — 한 발
+			_spawn(dir, box, dmg)
+
+	_cooldown_left = _safe_time(_skill.get("cooldown", 3.0), 3.0)
+
+
+## 부챗살로 count 발. 가운데를 기준으로 spread_deg 안에 고르게 편다.
+func _spawn_spread(dir: Vector3, count: int, spread_deg: float,
+		pellet_radius: float, dmg: float) -> void:
+	count = maxi(count, 1)
+	var shape := {"kind": "sphere", "radius": pellet_radius}
+	for i in count:
+		# count 가 1이면 정가운데, 아니면 -spread/2 ~ +spread/2 로 편다
+		var t: float = 0.5 if count == 1 else float(i) / float(count - 1)
+		var angle := deg_to_rad(lerpf(-spread_deg * 0.5, spread_deg * 0.5, t))
+		_spawn(dir.rotated(Vector3.UP, angle), shape, dmg)
+
+
+## 투사체 한 발. 그림·색·수치를 실어 보낸다.
+func _spawn(dir: Vector3, shape: Dictionary, dmg: float) -> void:
 	# 플레이어 밑에 달면 플레이어가 움직일 때 투사체가 같이 끌려간다.
 	# 그래서 형제로 붙인다. current_scene 은 씬을 코드로 올렸을 때 비어 있어 쓰지 않는다.
 	var world := get_parent()
 	if world == null:
 		return
-	world.add_child(shot)
-	shot.global_position = _muzzle.global_position
 
-	_cooldown_left = float(_skill.get("cooldown", 3.0))
+	var shot := PROJECTILE.new()
+	shot.configure(dir, {
+		"speed": _skill.get("speed", 20.0),
+		"distance": _skill.get("distance", 12.0),
+		"shape": shape,
+		"damage": dmg,
+		"color": skill_color,
+		"mask": skill_mask,
+	})
+	world.add_child(shot)
+	shot.global_position = _spawn_point(shape)
+
+
+## 투사체가 태어날 자리.
+## 총구 높이는 1m 남짓인데 판정 반경은 범위 값에 따라 그보다 커질 수 있다.
+## 그대로 두면 태어나는 순간 바닥과 겹쳐 `body_entered` 가 터지고 즉시 사라진다 —
+## 실제로 기본 스킬 Q(불꽃탄)와 R(대폭발)이 한 발도 안 나가고 있었다.
+## 그래서 판정이 바닥을 벗어나도록 최소 높이를 보장한다.
+func _spawn_point(shape: Dictionary) -> Vector3:
+	var pos := _muzzle.global_position
+	var clearance := float(shape.get("radius", 0.5)) + GROUND_CLEARANCE
+	pos.y = maxf(pos.y, global_position.y + clearance)
+	return pos
 
 
 ## 쿨타임이 얼마나 남았는지 (0.0 = 지금 쏠 수 있음). HUD 가 붙으면 이걸 쓴다.

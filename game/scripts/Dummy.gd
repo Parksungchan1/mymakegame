@@ -62,15 +62,18 @@ func _build() -> void:
 
 
 ## 투사체가 부르는 창구. 이름을 바꾸면 Projectile.gd 가 못 찾는다.
-func take_damage(amount: float) -> void:
+## **반환값이 계약이다** — false 면 "안 맞았다"는 뜻이고 투사체는 그냥 지나간다.
+## 쓰러진 허수아비가 탄을 먹어 뒤에 선 적을 지켜주는 시체 방패를 막으려는 것이다.
+func take_damage(amount: float) -> bool:
 	if _down:
-		return
+		return false
 	hp = maxf(hp - amount, 0.0)
 	_refresh()
 	if hp <= 0.0:
 		_fall()
 	else:
 		_flash()
+	return true
 
 
 func _refresh() -> void:

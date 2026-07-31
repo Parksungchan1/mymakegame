@@ -119,10 +119,10 @@ func _build_header() -> void:
 	hint.modulate = Color(1, 1, 1, 0.55)
 	_root.add_child(hint)
 
-	# 지금 단계에서 실제로 전투에 반영되는 게 뭔지 사실대로 적는다.
-	# 그림이 이미 태그로 판정되고 있어서, 안 적어두면 그게 전투에 쓰이는 줄 알게 된다.
+	# 그림이 전투에서 뭘 바꾸고 뭘 안 바꾸는지 적어둔다.
+	# 이걸 모르면 "선을 얇게 그리면 관통하겠지" 같은 오해를 하게 된다.
 	var stage := Label.new()
-	stage.text = "지금(3a)은 데미지·범위 수치만 전투에 반영됩니다. 그림과 형태는 3b에서 붙습니다."
+	stage.text = "그림은 겉모습과 형태를 정합니다. 세기는 수치가 정합니다 — 총 판정 면적은 범위 값으로 고정."
 	stage.add_theme_font_size_override("font_size", 13)
 	stage.modulate = Color(1.0, 0.85, 0.5, 0.9)
 	_root.add_child(stage)
@@ -320,16 +320,11 @@ func _refresh() -> void:
 	var metrics: Dictionary = Balance.analyze_mask(mask)
 	var tag: String = Balance.tag_from_metrics(metrics)
 
-	# 아래 수치는 **실제 전투에 쓰이는 값**이어야 한다.
-	# 3a 에서는 그림 태그가 아직 전투에 안 쓰이므로(항상 둥긂) 그 기준으로 계산한다.
-	# 판정된 태그로 계산하면 화면에는 부채꼴·산탄이 뜨는데 실제로는 구가 날아간다.
-	var combat_tag: String = Balance.TAG_ROUND
+	# 아래 수치는 **실제 전투에 쓰이는 값**이다. 그린 태그가 그대로 전투에 들어간다.
+	var combat_tag: String = tag
 	var d: Dictionary = Balance.derive(_damage.value, _range.value, combat_tag)
 
-	if tag == combat_tag:
-		_tag_label.text = "형태: %s" % tag
-	else:
-		_tag_label.text = "형태: %s  (3b 예정 — 지금은 둥긂으로 나감)" % tag
+	_tag_label.text = "형태: %s" % tag
 
 	var cost := float(d["cost"])
 	if bool(d["over_budget"]):
@@ -365,7 +360,7 @@ func _describe_box(box: Dictionary) -> String:
 		"capsule":
 			return "캡슐 길이 %.1fm 폭 %.2fm" % [float(box["length"]), float(box["width"])]
 		"cone":
-			return "부채꼴 %d° 반경 %.1fm" % [int(box["angle_deg"]), float(box["radius"])]
+			return "부채꼴 %d° — 작은 탄 %d발" % [int(box["angle_deg"]), int(box.get("pellets", 3))]
 		"scatter":
 			return "산탄 %d발 반경 %.2fm" % [int(box["pellets"]), float(box["pellet_radius"])]
 		_:
