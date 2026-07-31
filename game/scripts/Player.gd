@@ -33,25 +33,36 @@ extends CharacterBody3D
 @export_range(-80.0, 0.0) var cam_pitch_deg: float = -32.0
 @export var cam_distance: float = 7.0
 
-# ── 스킬 (로드맵 2단계: 고정 스킬 1개 발사) ───────────────────
-## 2단계는 "고정 스킬 1개 발사"다. 그래서 수치를 여기 직접 박아둔다.
-## 값은 SkillDB 기본 스킬 "불꽃탄" 과 같게 맞췄다.
-## 3단계에서 에디터가 붙으면 SkillDB.get_slot("Q") 에서 읽어오도록 바꾼다.
-## 지금 SkillDB 를 읽지 않는 건 순서 때문이다 — 2단계가 3단계에 기대면 안 된다.
+# ── 스킬 (로드맵 3a: 에디터의 수치가 실제 발사에 반영) ────────
+## 2단계에서는 수치를 여기 직접 박아뒀지만, 3a 부터는 **에디터에서 정한 수치**를 쓴다.
+## Tab 으로 제작창을 열어 데미지·범위 슬라이더를 바꾸고 저장하면 바로 반영된다.
+##
+## 아직 **수치만** 가져온다. 그림은 안 쓴다.
+## 그래서 형태 태그는 무조건 기본값 "둥긂"이다 — 어떤 그림을 그려도 구체가 날아간다.
+## 그림을 겉모습·형태 태그로 쓰는 건 3b 다. 기획서 87~88행이 3a → 3b 순서를 못박았다.
 const PROJECTILE := preload("res://scripts/skill/Projectile.gd")
 
-@export var skill_name: String = "불꽃탄"
-@export_range(1.0, 100.0) var skill_damage: float = 22.0
-@export_range(1.0, 100.0) var skill_range_pt: float = 18.0
-@export var skill_color: Color = Color(1.0, 0.45, 0.15)
+## 읽어올 슬롯. 3a 는 Q 하나만 쓴다. QWER 4슬롯은 로드맵 4단계다.
+const SKILL_SLOT := "Q"
+
+## SkillDB 슬롯이 비었을 때만 쓰는 값(저장 파일이 아직 없는 첫 실행 등)
+@export var fallback_skill_name: String = "불꽃탄"
+@export_range(1.0, 100.0) var fallback_damage: float = 22.0
+@export_range(1.0, 100.0) var fallback_range_pt: float = 18.0
+@export var fallback_color: Color = Color(1.0, 0.45, 0.15)
 
 @onready var _pivot: Node3D = $CamPivot
 @onready var _arm: SpringArm3D = $CamPivot/SpringArm3D
 @onready var _body: Node3D = $Body
 @onready var _muzzle: Marker3D = $Body/Wand/Muzzle
 
+## 지금 들고 있는 스킬. `_reload_skill()` 이 SkillDB 에서 채운다.
+var skill_name: String = ""
+var skill_damage: float = 0.0
+var skill_range_pt: float = 0.0
+var skill_color: Color = Color.WHITE
+
 ## 쿨타임·발동시간·투사체 속도·판정 크기 — 전부 Balance 가 정한다.
-## 2단계 고정 스킬은 그림이 없으니 형태 태그는 기본값 "둥긂"이다.
 var _skill: Dictionary = {}
 var _cooldown_left: float = 0.0
 var _cast_left: float = 0.0
@@ -62,6 +73,29 @@ func _ready() -> void:
 	# 시점 조작이 없으니 마우스는 잡지 않는다. 스킬 제작창에서 그대로 쓴다.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_apply_camera_angle()
+	# 제작창에서 저장하면 곧바로 다음 발사에 반영된다.
+	SkillDB.slot_changed.connect(_on_slot_changed)
+	_reload_skill()
+
+
+func _on_slot_changed(slot: String) -> void:
+	if slot == SKILL_SLOT:
+		_reload_skill()
+
+
+## SkillDB → 지금 들고 있는 스킬. 그림(mask)과 저장된 태그는 일부러 읽지 않는다(3b).
+func _reload_skill() -> void:
+	var s: Dictionary = SkillDB.get_slot(SKILL_SLOT)
+	if s.is_empty():
+		skill_name = fallback_skill_name
+		skill_damage = fallback_damage
+		skill_range_pt = fallback_range_pt
+		skill_color = fallback_color
+	else:
+		skill_name = String(s["name"])
+		skill_damage = float(s["damage"])
+		skill_range_pt = float(s["range_pt"])
+		skill_color = s["color"]
 	_skill = Balance.derive(skill_damage, skill_range_pt, Balance.TAG_ROUND)
 
 

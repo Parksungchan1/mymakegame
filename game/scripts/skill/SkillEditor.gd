@@ -119,6 +119,14 @@ func _build_header() -> void:
 	hint.modulate = Color(1, 1, 1, 0.55)
 	_root.add_child(hint)
 
+	# 지금 단계에서 실제로 전투에 반영되는 게 뭔지 사실대로 적는다.
+	# 그림이 이미 태그로 판정되고 있어서, 안 적어두면 그게 전투에 쓰이는 줄 알게 된다.
+	var stage := Label.new()
+	stage.text = "지금(3a)은 데미지·범위 수치만 전투에 반영됩니다. 그림과 형태는 3b에서 붙습니다."
+	stage.add_theme_font_size_override("font_size", 13)
+	stage.modulate = Color(1.0, 0.85, 0.5, 0.9)
+	_root.add_child(stage)
+
 
 func _build_slot_row() -> void:
 	var row := HBoxContainer.new()
@@ -311,9 +319,17 @@ func _refresh() -> void:
 	var mask := _canvas.get_mask()
 	var metrics: Dictionary = Balance.analyze_mask(mask)
 	var tag: String = Balance.tag_from_metrics(metrics)
-	var d: Dictionary = Balance.derive(_damage.value, _range.value, tag)
 
-	_tag_label.text = "형태: %s" % tag
+	# 아래 수치는 **실제 전투에 쓰이는 값**이어야 한다.
+	# 3a 에서는 그림 태그가 아직 전투에 안 쓰이므로(항상 둥긂) 그 기준으로 계산한다.
+	# 판정된 태그로 계산하면 화면에는 부채꼴·산탄이 뜨는데 실제로는 구가 날아간다.
+	var combat_tag: String = Balance.TAG_ROUND
+	var d: Dictionary = Balance.derive(_damage.value, _range.value, combat_tag)
+
+	if tag == combat_tag:
+		_tag_label.text = "형태: %s" % tag
+	else:
+		_tag_label.text = "형태: %s  (3b 예정 — 지금은 둥긂으로 나감)" % tag
 
 	var cost := float(d["cost"])
 	if bool(d["over_budget"]):
@@ -334,7 +350,7 @@ func _refresh() -> void:
 		"사거리        %.1f m" % float(d["distance"]),
 		"판정 면적     %.2f m²" % float(d["total_area"]),
 		"히트박스      %s" % _describe_box(box),
-		"한 방 데미지  %.1f" % Balance.damage_per_hit(_damage.value, tag),
+		"한 방 데미지  %.1f" % Balance.damage_per_hit(_damage.value, combat_tag),
 		"",
 		"[i]그림 지표 — 채움 %.2f · 종횡 %.2f · 복잡 %.2f · 덩어리 %d[/i]" % [
 			float(metrics["fill_ratio"]), float(metrics["aspect"]),
