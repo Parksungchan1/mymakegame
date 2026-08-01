@@ -10,6 +10,11 @@ signal mask_changed
 ## 칠해진 칸 색 (에디터에서 스킬 색으로 바꿔준다)
 var ink: Color = Color(1.0, 0.45, 0.15)
 
+## 좌클릭이 하는 일. true 면 지우개다.
+## 우클릭 지우기는 원래부터 됐지만 **아무도 못 찾았다** — 안내 문구에만 있었기 때문이다.
+## 그래서 눈에 보이는 도구 버튼을 붙였고, 그게 이 값을 바꾼다.
+var erasing: bool = false
+
 var _mask: PackedByteArray
 ## 지금 누르고 있는 값. 1=칠하기 0=지우기. -1 이면 안 누르는 중.
 var _stroke: int = -1
@@ -97,7 +102,11 @@ func _gui_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_RIGHT:
 			if mb.pressed:
-				_stroke = 1 if mb.button_index == MOUSE_BUTTON_LEFT else 0
+				# 좌클릭 = 지금 고른 도구 / 우클릭 = 언제나 지우개(빠른 수정용)
+				if mb.button_index == MOUSE_BUTTON_LEFT:
+					_stroke = 0 if erasing else 1
+				else:
+					_stroke = 0
 				_last_cell = _pos_to_cell(mb.position)
 				_paint(_last_cell, _stroke)
 			else:

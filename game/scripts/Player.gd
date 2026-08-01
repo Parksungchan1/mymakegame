@@ -17,8 +17,18 @@ extends CharacterBody3D
 ## 방향키를 떼거나 꺾었을 때 바로 반응하도록 가감속을 세게 준다.
 @export var accel: float = 55.0
 @export var friction: float = 65.0
-## 점프로 뜨는 높이(m). 기획서의 회피 수단은 이동 + 점프뿐이다.
+## 점프로 뜨는 높이(m).
 @export var jump_height: float = 1.2
+
+## 공중에서 한 번 더 뛸 수 있는 높이(m). 1단보다 살짝 낮게 잡아 남발을 막는다.
+## 2026-08-01 사용자 요구로 추가 — **"스킬을 피하면서 해야 하기 때문"** 이 이유다.
+## 즉 이건 이동 편의가 아니라 **회피 수단**이다. 그래서 공중에서 방향을 꺾을 수 있어야
+## 의미가 있고, 실제로 그렇게 만들었다(`_move` 의 가감속이 공중에서도 그대로 먹는다).
+@export var double_jump_height: float = 1.0
+
+## 공중 덤블링 한 바퀴에 걸리는 시간(초). 짧을수록 팽팽 돈다.
+## 연출이지만 기능도 겸한다 — 2단을 썼는지 눈으로 바로 알 수 있다.
+@export var flip_time: float = 0.42
 ## 중력. 현실값(9.8)보다 세야 점프가 쫀득하다.
 @export var gravity: float = 22.0
 ## 진행 방향으로 몸이 도는 속도
@@ -75,6 +85,11 @@ var _cooldowns: Dictionary = {}
 ## 네 개를 동시에 캐스팅하면 마법봉이 네 개 필요하다.
 var _casting_slot: String = ""
 var _cast_left: float = 0.0
+
+## 공중에서 2단 점프를 아직 쓸 수 있는가. 땅에 닿으면 다시 채워진다.
+var _double_ready: bool = false
+## 덤블링 남은 시간(초). 0 보다 크면 도는 중이다.
+var _flip_left: float = 0.0
 
 
 func _ready() -> void:
@@ -154,15 +169,42 @@ func _move(delta: float) -> void:
 	velocity.x = flat.x
 	velocity.z = flat.z
 
-	# 중력 + 점프
+	# 중력 + 점프 (땅에서 1단, 공중에서 한 번 더)
 	if is_on_floor():
+		_double_ready = true
 		if Input.is_action_just_pressed("jump"):
 			velocity.y = sqrt(2.0 * gravity * jump_height)
+			_double_ready = true   # 뜨자마자 2단을 쓸 수 있어야 급회피가 된다
 	else:
 		velocity.y -= gravity * delta
+		if _double_ready and Input.is_action_just_pressed("jump"):
+			_double_ready = false
+			# 떨어지는 중이었어도 확실히 뜨도록 **속도를 덮어쓴다**(더하지 않는다).
+			# 안 그러면 낙하 속도가 클수록 2단이 안 먹혀서 정작 필요할 때 안 뜬다.
+			velocity.y = sqrt(2.0 * gravity * double_jump_height)
+			_flip_left = flip_time
 
 	move_and_slide()
 	_face(dir, delta)
+	_tick_flip(delta)
+
+
+## 2단 점프를 쓰면 몸이 앞으로 한 바퀴 돈다.
+## 연출이면서 표시이기도 하다 — 2단을 이미 썼는지 눈으로 알 수 있다.
+## 땅에 닿으면 남은 회전을 버리고 바로 똑바로 선다(착지가 어정쩡해 보이면 안 된다).
+func _tick_flip(delta: float) -> void:
+	if _flip_left <= 0.0:
+		if not is_equal_approx(_body.rotation.x, 0.0):
+			_body.rotation.x = 0.0
+		return
+	if is_on_floor():
+		_flip_left = 0.0
+		_body.rotation.x = 0.0
+		return
+	_flip_left = maxf(_flip_left - delta, 0.0)
+	# 남은 시간을 각도로 환산한다. 0 이 되면 정확히 한 바퀴 끝난 자세다.
+	var done: float = 1.0 - (_flip_left / flip_time)
+	_body.rotation.x = -TAU * done
 
 
 ## 캐릭터는 자기가 가는 방향을 본다.
@@ -327,3 +369,13 @@ func cooldown_left(slot: String = "Q") -> float:
 ## 그 슬롯에 든 스킬 이름. HUD·디버그용.
 func slot_name(slot: String) -> String:
 	return String((_slots.get(slot, {}) as Dictionary).get("name", ""))
+
+
+## 그 슬롯의 **전체** 쿨타임(초). HUD 가 남은 비율을 그리려면 분모가 필요하다.
+func cooldown_total(slot: String) -> float:
+	return float(_derived(slot).get("cooldown", 0.0))
+
+
+## 지금 발동 중인 슬롯("" = 없음). HUD 가 발동 표시를 띄우는 데 쓴다.
+func casting_slot() -> String:
+	return _casting_slot

@@ -34,6 +34,15 @@ var _loading: bool = false
 var _confirm: ConfirmationDialog
 var _pending_slot: String = ""
 var _save_btn: Button
+var _pen_btn: Button
+var _eraser_btn: Button
+
+
+## 그리기 ↔ 지우개 전환. 두 버튼이 항상 서로 반대 상태가 되게 묶는다.
+func _set_erasing(on: bool) -> void:
+	_canvas.erasing = on
+	_pen_btn.button_pressed = not on
+	_eraser_btn.button_pressed = on
 
 
 func _ready() -> void:
@@ -183,6 +192,23 @@ func _build_body() -> void:
 	var tools := HBoxContainer.new()
 	tools.add_theme_constant_override("separation", 8)
 	left.add_child(tools)
+
+	# 도구 버튼 — 지우개가 우클릭에만 있어서 아무도 못 찾았다(사용자 보고).
+	# 이제 눈에 보이고, 지금 무슨 도구인지도 보인다.
+	_pen_btn = Button.new()
+	_pen_btn.text = "✏ 그리기"
+	_pen_btn.toggle_mode = true
+	_pen_btn.button_pressed = true
+	_pen_btn.custom_minimum_size = Vector2(96, 34)
+	_pen_btn.pressed.connect(func() -> void: _set_erasing(false))
+	tools.add_child(_pen_btn)
+
+	_eraser_btn = Button.new()
+	_eraser_btn.text = "🧽 지우개"
+	_eraser_btn.toggle_mode = true
+	_eraser_btn.custom_minimum_size = Vector2(96, 34)
+	_eraser_btn.pressed.connect(func() -> void: _set_erasing(true))
+	tools.add_child(_eraser_btn)
 
 	var clear_btn := Button.new()
 	clear_btn.text = "전부 지우기"

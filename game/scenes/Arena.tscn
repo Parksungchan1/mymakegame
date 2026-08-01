@@ -1,4 +1,4 @@
-[gd_scene load_steps=87 format=3]
+[gd_scene load_steps=88 format=3]
 
 ; ── 맵 아트: 「거대한 원룸 한 칸」 ────────────────────────────
 ; 기획서 10행 "맵: 거대한 원룸 한 칸, 소형 인간들이 싸움".
@@ -30,6 +30,7 @@
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/skill/SkillEditor.gd" id="2_editor"]
 [ext_resource type="Script" path="res://scripts/Dummy.gd" id="3_dummy"]
+[ext_resource type="Script" path="res://scripts/SkillHud.gd" id="4_hud"]
 
 ; 배경은 어둡게 두되 앰비언트를 올려 물체가 검게 죽지 않게 한다.
 ; 글로우는 마법 이펙트용 — 밝은 투사체만 번지게 문턱(threshold)을 1.0 로 잡았다.
@@ -790,3 +791,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 12)
 
 [node name="SkillEditor" type="CanvasLayer" parent="."]
 script = ExtResource("2_editor")
+
+; QWER 스킬바. 유저가 그린 그림이 그대로 아이콘이 된다.
+; SkillEditor(layer 10) 보다 아래라 제작창을 열면 가려진다.
+[node name="SkillHud" type="CanvasLayer" parent="."]
+script = ExtResource("4_hud")
