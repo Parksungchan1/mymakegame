@@ -1,4 +1,4 @@
-[gd_scene load_steps=32 format=3]
+[gd_scene load_steps=39 format=3]
 
 ; ── 캐릭터 아트 ───────────────────────────────────────────────
 ; 기획서 10행 "캐릭터/속도는 멧챠 카멜레온풍" → 작고 날쌘 2등신 실루엣.
@@ -213,6 +213,78 @@ size = Vector3(0.13, 0.02, 2.269)
 [sub_resource type="PrismMesh" id="mesh_aim_head"]
 size = Vector3(1.05, 1.4, 0.02)
 
+; ══ 발사 이펙트 부품 (2026-08-02 신설) ═════════════════════════
+; 개발이 코드로 켜고 끄는 **재료**다. 아트가 재질·그라디언트를 미리 구워 둔다.
+; 설계 근거·수치·타이밍은 전부 `reports/designer.md` 「발사 손맛」 절에 있다.
+;
+; 🔑 목업을 실제로 렌더해서 얻은 결론 두 개(그대로 지킬 것):
+;   1) **색은 「가산(add)」이 아니라 「혼합(mix)」에서만 살아남는다.**
+;      진한 청보라(0.28,0.2,0.95)를 가산으로 깔았더니 회색 러그 위에서 연보라로 떠서
+;      스킬 색이 안 읽혔다. 혼합으로 깐 잔상은 채도가 그대로 남았다.
+;      → **유저가 그린 그림(=색의 주인)은 혼합. 플래시(=밝기 담당)만 가산.**
+;   2) 가산 플래시의 한가운데는 어떤 색을 넣어도 흰색으로 탄다. 그러니 **일부러**
+;      흰 코어를 따로 두되 **아주 짧게**(0.03초) 쓰고, 색 헤일로를 길게 남긴다.
+
+; 부드러운 원형 감쇠. 플래시·후광·파티클이 전부 이 한 장을 쓴다.
+; 0.35 지점에서 알파를 0.55 로 꺾어서 「가운데가 단단하고 가장자리는 안개」가 되게 했다.
+; 선형 감쇠로 두면 원반 가장자리에 딱딱한 테두리가 생겨 「종이 원」으로 보인다.
+[sub_resource type="Gradient" id="grad_soft"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.55, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="tex_soft"]
+gradient = SubResource("grad_soft")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="QuadMesh" id="mesh_fx_quad"]
+size = Vector2(1, 1)
+
+; 흰 코어 — 「터졌다」는 밝기만 담당한다. 색이 없다 = 어떤 스킬 색과도 안 싸운다.
+; 발사·명중 **처음 0.03초**에만 쓰고 바로 끈다. 오래 두면 스킬 색을 통째로 먹는다.
+[sub_resource type="StandardMaterial3D" id="mat_flash_core"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+cull_mode = 2
+billboard_mode = 1
+billboard_keep_scale = true
+albedo_color = Color(1, 1, 1, 0.95)
+albedo_texture = SubResource("tex_soft")
+render_priority = 1
+
+; 색 헤일로 — 스킬 색으로 물들이는 자리(개발이 albedo_color 의 rgb 를 갈아끼운다).
+; 알파 0.55 는 렌더로 잡은 값이다. 0.85 로 두면 헤일로 자체가 흰색으로 타서
+; 「무슨 색 스킬인지」가 안 읽혔다.
+[sub_resource type="StandardMaterial3D" id="mat_flash_halo"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+cull_mode = 2
+billboard_mode = 1
+billboard_keep_scale = true
+albedo_color = Color(1, 1, 1, 0.55)
+albedo_texture = SubResource("tex_soft")
+
+; 기 모으는 알갱이. CPUParticles3D 가 이 메시를 뿌린다.
+; vertex_color_use_as_albedo 를 켜 둬서 파티클의 `color` 만 바꾸면 스킬 색이 된다.
+[sub_resource type="StandardMaterial3D" id="mat_mote"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+cull_mode = 2
+billboard_mode = 3
+billboard_keep_scale = true
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("tex_soft")
+
+[sub_resource type="QuadMesh" id="mesh_mote"]
+material = SubResource("mat_mote")
+size = Vector2(0.09, 0.09)
+
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
 collision_mask = 1
@@ -370,6 +442,16 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.46)
 mesh = SubResource("mesh_wand_tip")
 surface_material_override/0 = SubResource("mat_wand_tip")
 
+; 차징 등 — 「모으고 있다」를 방 전체에 알린다.
+; 시전 진행률 t 에 대해 energy = 2.5·t² 로 올리면 **끝에서 확 밝아진다**(= 예고).
+; 선형으로 올리면 언제 터질지 정보가 안 실린다. energy 0 = 잠든 상태.
+; ⚠ `mat_wand_tip` 은 이 노드만 쓰는 독립 재질이다 — 개발이 `_reload_slot()` 에서
+;    `albedo_color`/`emission` 을 슬롯 색으로 갈아끼워도 다른 데 안 번진다.
+[node name="ChargeLight" type="OmniLight3D" parent="Body/Wand/Rod/Tip"]
+light_color = Color(1, 0.72, 0.35, 1)
+light_energy = 0.0
+omni_range = 3.5
+
 ; Muzzle 은 Wand 의 **직계 자식**으로 남는다(경로 `$Body/Wand/Muzzle` 고정).
 ; 위치는 개정 전과 완전히 동일하다 — Body 기준 **(0.2652, 0.7492, -0.8974)**.
 ;   (Rod 의 basis × (0,0,-0.6) 을 손으로 푼 값. 아래 ⚠ 를 반드시 읽을 것)
@@ -385,6 +467,62 @@ surface_material_override/0 = SubResource("mat_wand_tip")
 ;    화면에서 머리 옆으로 보이는 것은 봉 끝이 0.78m 앞에 있어서 생기는 착시다.
 [node name="Muzzle" type="Marker3D" parent="Body/Wand"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0048, -0.3108, -0.8974)
+
+; ── 총구 섬광 ──────────────────────────────────────────────────
+; `visible = false` 로 잠들어 있다. 발사 프레임에 개발이 켜고 0.11초 뒤 끈다.
+; Muzzle 의 자식이라 팔이 내리쳐진 자세 그대로, 마법봉 끝에서 터진다.
+;
+; 크기 근거(렌더 확인): 헤일로 quad 1.7m → 그라디언트 때문에 **눈에 보이는 지름은
+; 약 0.85m** = 캐릭터 키(1.7m)의 절반. 7m 거리·FOV 70° 화면에서 확실히 읽히면서
+; 캐릭터 얼굴은 안 가리는 크기다. 1.5m 로 줄였더니 손에 묻혀 안 보였다.
+;
+; 개발이 만질 것: `visible` · `scale` · 두 재질의 `albedo_color`
+;   (Halo 의 rgb 만 스킬 색으로. Core 는 **흰색 그대로 둔다** — 위 ⚠ 참고)
+[node name="Flash" type="Node3D" parent="Body/Wand/Muzzle"]
+visible = false
+
+[node name="Halo" type="MeshInstance3D" parent="Body/Wand/Muzzle/Flash"]
+transform = Transform3D(1.7, 0, 0, 0, 1.7, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("mesh_fx_quad")
+surface_material_override/0 = SubResource("mat_flash_halo")
+
+[node name="Core" type="MeshInstance3D" parent="Body/Wand/Muzzle/Flash"]
+transform = Transform3D(0.62, 0, 0, 0, 0.62, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("mesh_fx_quad")
+surface_material_override/0 = SubResource("mat_flash_core")
+
+; 발사 순간 **방이 반응하게** 만드는 등. 이 목록에서 가성비가 제일 좋다 —
+; 폴리곤 0개로 바닥·가구·러그가 전부 스킬 색으로 물든다. 고정 카메라라 바닥이 늘 보인다.
+; energy 0 으로 잠들어 있다. 개발이 **2.4 → 0 을 0.10초** `ease_out` 으로 감쇠시킨다.
+;
+; ⚠ **범위 5.0 / 세기 4.0 은 과했다(렌더 실측).** 반경 5m 짜리 따뜻한 웅덩이가 생겨
+;   화면을 먹고, 무엇보다 **자기가 만든 빛이 자기 섬광(Flash quad)을 덮어서** 섬광이
+;   흰 점으로 쪼그라들었다. 그래서 4.0m / 2.4 로 내렸다.
+;   순서를 기억할 것 — **읽히는 건 quad 고, 등은 「방이 반응한다」만 담당한다.**
+[node name="FireLight" type="OmniLight3D" parent="Body/Wand/Muzzle"]
+light_color = Color(1, 0.72, 0.35, 1)
+light_energy = 0.0
+omni_range = 4.0
+
+; 「기 모으기」 — 시전(차징) 동안 사방 0.75m 에서 마법봉 끝으로 **빨려 들어오는** 알갱이.
+; radial_accel 이 음수라서 원점(= 총구)으로 가속한다. 0.75m 를 정확히 0.5초에 훑는다
+; (s = ½·6.0·0.5² = 0.75). 발동 시간에 맞추려면 `lifetime` 만 바꾸고
+; `radial_accel_*` 를 `-2·0.75/lifetime²` 로 같이 맞춰야 도착 시점이 안 어긋난다.
+; `emitting` 은 false. 시전 시작에 켜고 발사 순간에 끈다.
+[node name="ChargeMotes" type="CPUParticles3D" parent="Body/Wand/Muzzle"]
+emitting = false
+amount = 14
+lifetime = 0.5
+local_coords = true
+mesh = SubResource("mesh_mote")
+emission_shape = 2
+emission_sphere_radius = 0.75
+spread = 180.0
+gravity = Vector3(0, 0, 0)
+initial_velocity_min = 0.0
+initial_velocity_max = 0.0
+radial_accel_min = -6.0
+radial_accel_max = -6.0
 
 ; ── 조준 방향 표시 ────────────────────────────────────────────
 ; 사용자 요구: "스킬이 날아가는 방향을 화살표나 이런 걸로 보이게".

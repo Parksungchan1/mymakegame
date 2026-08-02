@@ -33,22 +33,29 @@ const FLASH_TIME := 0.12
 ## 아래는 그걸 만드는 최소 장치다. 유저가 그린 그림은 **계속 읽혀야 하므로**
 ## 그림 자체를 가리지 않고 **주변**에 붙인다.
 
-## 초당 몇 바퀴 도는가. 그림이 살아 있는 느낌을 준다.
-const SPIN_TURNS := 0.85
-## 진행 방향으로 늘리는 비율. 빠를수록 늘어나 보여 속도감이 생긴다.
-const STRETCH := 0.28
 ## 태어날 때 이만큼에서 시작해 제 크기로 커진다. "튀어나온" 느낌.
 const BIRTH_SCALE := 0.45
 const BIRTH_TIME := 0.07
 
-## 꼬리(잔상) — 지나간 자리에 흐려지는 복제를 남긴다.
-const TRAIL_INTERVAL := 0.022
-const TRAIL_LIFE := 0.17
-const TRAIL_ALPHA := 0.5
+## 꼬리(잔상) — 지나간 자리에 같은 그림을 흐리게 남긴다.
+##
+## 🔑 아트 결론: **스핀과 스트레치는 넣으면 안 된다.**
+## 스트레치는 그림을 찌그러뜨리고 스핀은 유저가 그린 기호를 뒤집는다.
+## **잔상만이 유일하게 가독성과 속도감이 같은 방향**이다 — 같은 그림을 여러 번 보여주니까.
+## 그래서 회전·왜곡은 안 준다. 그림은 그림대로 두고 **과거를 남겨** 속도를 만든다.
+##
+## 간격을 시간이 아니라 **거리**로 잡는다. 그래야 느린 탄도 빠른 탄도 같은 밀도로 이어진다.
+const TRAIL_SPACING := 0.65   ## 그림 크기의 몇 배마다 한 장 남기나
+const TRAIL_GHOSTS := 4.0     ## 항상 이만큼이 화면에 남는다
+const TRAIL_ALPHA := 0.45
+const TRAIL_END_SCALE := 0.70
 
-## 명중 순간 터지는 링
+## 명중 순간 그림이 커지며 사라지는 시간
 const BURST_TIME := 0.20
 const BURST_SCALE := 3.4
+
+## 명중 폭발(파편·링·빛)
+const IMPACT := preload("res://scripts/skill/Impact.gd")
 
 var speed: float = 20.0
 var max_distance: float = 12.0
@@ -183,7 +190,7 @@ func _draw_sprite() -> Sprite3D:
 
 ## 지나간 자리에 흐려지는 복제를 남긴다.
 ## 그림을 가리지 않으면서 **어디서 어디로 갔는지**를 화면에 남기는 게 목적이다.
-func _drop_trail() -> void:
+func _drop_trail(life: float) -> void:
 	if _sprite == null or _tex == null:
 		return
 	var ghost := Sprite3D.new()
@@ -205,11 +212,11 @@ func _drop_trail() -> void:
 	ghost.global_position = global_position
 	ghost.rotation = _sprite.rotation
 
-	# 흐려지며 쪼그라든다. 남는 시간이 짧아야 "꼬리"지 "줄줄이"가 아니다.
+	# 흐려지며 쪼그라든다. 수명이 「간격 × 남길 장수」라 화면엔 항상 같은 수가 보인다.
 	var tw := ghost.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(ghost, "modulate:a", 0.0, TRAIL_LIFE)
-	tw.tween_property(ghost, "scale", ghost.scale * 0.55, TRAIL_LIFE)
+	tw.tween_property(ghost, "modulate:a", 0.0, life)
+	tw.tween_property(ghost, "scale", ghost.scale * TRAIL_END_SCALE, life)
 	tw.chain().tween_callback(ghost.queue_free)
 
 
@@ -292,24 +299,19 @@ func _animate(delta: float) -> void:
 	var born: float = clampf(_age / BIRTH_TIME, 0.0, 1.0)
 	var grow: float = lerpf(BIRTH_SCALE, 1.0, born * (2.0 - born))   # ease-out
 
-	# ② 진행 방향으로 늘린다 — 빠를수록 길어져 속도감이 생긴다.
-	#    빌보드라 화면상 세로가 진행축이 아니므로 가로로 늘리지 않고 **전체를 살짝** 늘린다.
-	var fast: float = clampf(speed / 28.0, 0.0, 1.0)
-	var stretch: float = 1.0 + STRETCH * fast
-	_sprite.scale = Vector3(grow, grow * stretch, grow)
+	# 그림은 **왜곡하지 않는다.** 회전도 안 준다. 유저가 그린 게 그대로 읽혀야 한다.
+	_sprite.scale = Vector3.ONE * grow
 
-	# ③ 돈다. 그림이 살아 있는 느낌을 만드는 가장 싼 방법이다.
-	_sprite.rotation.z += TAU * SPIN_TURNS * delta
-
-	# ④ 빛이 맥박친다 — 멀리서도 "뭔가 날아온다" 가 읽힌다.
+	# ② 빛이 맥박친다 — 멀리서도 "뭔가 날아온다" 가 읽힌다.
 	if _lamp != null:
 		_lamp.light_energy = 1.6 + sin(_age * 22.0) * 0.35
 
-	# ⑤ 꼬리
+	# ③ 꼬리 — 간격을 **거리**로 잡는다. 느린 탄도 빠른 탄도 밀도가 같아진다.
 	_trail_wait -= delta
 	if _trail_wait <= 0.0:
-		_trail_wait = TRAIL_INTERVAL
-		_drop_trail()
+		var spacing: float = maxf(_sprite_size * TRAIL_SPACING, 0.05)
+		_trail_wait = clampf(spacing / maxf(speed, 0.1), 0.016, 0.12)
+		_drop_trail(_trail_wait * TRAIL_GHOSTS)
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -341,8 +343,27 @@ func _finish(target: Node3D) -> void:
 	set_deferred("monitoring", false)
 	set_physics_process(false)
 	_burst()
+	_explode(target != null)
 	await get_tree().create_timer(FLASH_TIME).timeout
 	queue_free()
+
+
+## 맞은 자리에 폭발을 남긴다 — 파편·충격파 링·빛.
+## 투사체는 곧 사라지므로 **형제로 붙여야** 폭발이 같이 안 지워진다.
+func _explode(hit_target: bool) -> void:
+	var world := get_parent()
+	if world == null:
+		return
+	var boom := IMPACT.new()
+	boom.color = color
+	boom.radius = maxf(_radius(), 0.35)
+	boom.lethal = hit_target
+	world.add_child(boom)
+	boom.global_position = global_position
+
+	# 소리 — 크면 낮게 운다. 저역이 「퍽」 을 만든다.
+	var pitch: float = clampf(1.35 - _radius() * 0.35, 0.55, 1.5)
+	Sfx.play("hit" if hit_target else "fire", pitch, -6.0 if not hit_target else 0.0)
 
 
 ## 맞은 자리에서 터진다. 그림이 확 커지며 사라지고 빛이 한 번 튄다.

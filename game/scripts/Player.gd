@@ -208,6 +208,7 @@ func _attach_shake() -> void:
 func shake_kill() -> void:
 	if _shake != null:
 		_shake.kill()
+	Sfx.play("kill", 1.0, 2.0)
 	_hitstop(0.07)
 
 
@@ -408,6 +409,7 @@ func _tick_dash(delta: float, input_dir: Vector3) -> bool:
 		_dash_dir = d.normalized()
 		_dash_left = dash_time
 		_dash_cool = dash_cooldown
+		Sfx.play("dash", 1.0, -4.0)
 		return true
 
 	return false
@@ -619,19 +621,65 @@ func _spawn(slot: String, dir: Vector3, shape: Dictionary, dmg: float) -> void:
 
 ## 총구 섬광. 발사 순간이 화면에 보여야 "쐈다" 가 된다.
 ## 종전엔 마법봉 끝 발광이 **상시로 켜져 있어서** 쏘는 순간이 전혀 티가 안 났다.
+##
+## 아트가 `Body/Wand/Muzzle` 밑에 `Flash/Halo` · `Flash/Core` · `FireLight` 를
+## **잠든 상태로 심어 놨다.** 개발은 켜고 끄기만 한다.
+## 역할이 갈려 있다 — 헤일로는 **혼합**(색 담당), 코어는 **가산**(밝기 담당).
+## 가산은 한가운데가 무슨 색이든 흰색으로 타므로 **코어를 훨씬 짧게** 껐다.
 func _muzzle_flash(col: Color) -> void:
 	if _muzzle == null:
 		return
-	var flash := OmniLight3D.new()
-	flash.light_color = col
-	flash.light_energy = 0.0
-	flash.omni_range = 4.5
-	_muzzle.add_child(flash)
-	# 확 켜졌다 빠르게 꺼진다. 길면 「빛나는 봉」이지 「발사」가 아니다.
-	var tw := flash.create_tween()
-	tw.tween_property(flash, "light_energy", 5.5, 0.03)
-	tw.tween_property(flash, "light_energy", 0.0, 0.11)
-	tw.tween_callback(flash.queue_free)
+
+	var halo := _muzzle.get_node_or_null("Flash/Halo") as MeshInstance3D
+	var core := _muzzle.get_node_or_null("Flash/Core") as MeshInstance3D
+	var lamp := _muzzle.get_node_or_null("FireLight") as OmniLight3D
+
+	_pop_flash(halo, col, 0.14, 1.0)    # 색 헤일로 — 길게
+	_pop_flash(core, col, 0.03, 0.55)   # 흰 코어 — 아주 짧게
+	if lamp != null:
+		lamp.light_color = col
+		var lt := lamp.create_tween()
+		lt.tween_property(lamp, "light_energy", 2.4, 0.02)
+		lt.tween_property(lamp, "light_energy", 0.0, 0.12)
+
+	Sfx.play("fire", clampf(1.3 - skill_range_hint() * 0.006, 0.7, 1.4))
+
+
+## 섬광 조각 하나를 확 켰다 끈다. 잠들어 있던 노드를 잠깐 깨우는 방식이다.
+func _pop_flash(node: MeshInstance3D, col: Color, life: float, size: float) -> void:
+	if node == null:
+		return
+	# 재질이 없을 수도 있으니(노드가 잠들어 있으면 `get_active_material` 이 null 을 준다)
+	# 없으면 만들어 쓴다. 없다고 그냥 넘어가면 색이 안 실려 흰 판때기가 뜬다.
+	# ⚠ 메시가 없으면 `get_active_material` 자체가 엔진 경고를 뱉으므로 먼저 거른다.
+	var m: StandardMaterial3D
+	var mat: Material = null
+	if node.mesh != null:
+		mat = node.get_active_material(0)
+	if mat is StandardMaterial3D:
+		m = (mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+	else:
+		m = StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	m.albedo_color = Color(col.r, col.g, col.b, 1.0)
+	node.material_override = m
+	var tw := node.create_tween()
+	tw.tween_property(m, "albedo_color:a", 0.0, life)
+	node.visible = true
+	node.scale = Vector3.ONE * size * 0.5
+	var st := node.create_tween()
+	st.tween_property(node, "scale", Vector3.ONE * size * 1.6, life) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	st.tween_callback(func() -> void: node.visible = false)
+
+
+## 소리에 스킬 크기를 싣기 위한 힌트값(범위 pt). 큰 스킬일수록 낮게 운다.
+func skill_range_hint() -> float:
+	var e: Dictionary = _slots.get(_casting_slot if not _casting_slot.is_empty() else "Q", {})
+	return float(e.get("range_pt", 20.0))
 
 
 ## 투사체가 태어날 자리.
