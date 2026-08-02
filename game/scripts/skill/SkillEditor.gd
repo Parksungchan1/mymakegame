@@ -151,7 +151,11 @@ func _build_header() -> void:
 	# 그림이 전투에서 뭘 바꾸고 뭘 안 바꾸는지 적어둔다.
 	# 이걸 모르면 "선을 얇게 그리면 관통하겠지" 같은 오해를 하게 된다.
 	var stage := Label.new()
-	stage.text = "그림은 겉모습과 형태를 정합니다. 세기는 수치가 정합니다 — 총 판정 면적은 범위 값으로 고정."
+	# ⚠ 이 문장은 **개정된 대원칙과 반드시 같아야 한다.**
+	# 예전엔 "총 판정 면적은 범위 값으로 고정" 이라고 적혀 있었는데,
+	# 사용자 승인으로 정규화 기준이 「면적」에서 「유효 명중 폭」으로 바뀌면서 거짓말이 됐다.
+	# 실제 면적은 흩어짐이 둥긂의 5배다. 「화면이 실제와 다른 값을 띄운다」의 다섯 번째 사례였다.
+	stage.text = "그림은 겉모습과 형태를 정합니다. 세기는 수치가 정합니다 — 유효 명중 폭이 범위 값으로 고정."
 	stage.add_theme_font_size_override("font_size", 13)
 	stage.modulate = Color(1.0, 0.85, 0.5, 0.9)
 	_root.add_child(stage)
@@ -451,8 +455,12 @@ func _refresh() -> void:
 		"유효 명중 폭  %.2f m" % float(d["effective_width"]),
 		"히트박스      %s" % _describe_box(box),
 		"전탄 명중     %s" % _describe_full_hit(box, float(d["reach"])),
-		"한 방 데미지  %.1f" % Balance.damage_per_hit(
-			_damage.value, combat_tag, int(box.get("pellets", 0))),
+		# 다탄 태그는 「한 방」이 총합의 1/N 이라 그것만 띄우면 약해 보인다.
+		# 슬라이더 100 인데 화면엔 8.0 이 뜨던 문제(QA 6차). 총합을 같이 띄운다.
+		"한 방 데미지  %.1f  (총 %.1f)" % [
+			Balance.damage_per_hit(_damage.value, combat_tag, int(box.get("pellets", 0))),
+			float(d.get("damage_out", Balance.damage_out(_damage.value))),
+		],
 		"",
 		# `신장` 은 회전과 무관한 길쭉함 지표다. 길쭉함 태그는 **이걸** 본다.
 		# `종횡` 은 여전히 바운딩박스 가로/세로다 — 이름과 뜻이 그대로라 거짓말은 아니지만,

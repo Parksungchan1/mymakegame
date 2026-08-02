@@ -25,6 +25,8 @@ const CAST_COLOR := Color(0.55, 0.85, 1.0, 0.9)
 
 var _player: Node
 var _slots: Array = []   # [{root, icon, veil, time, key, name}]
+## 대쉬 칸. 그림이 없는 고정 기술이라 아이콘 대신 글자를 쓴다.
+var _dash: Dictionary = {}
 
 
 func _ready() -> void:
@@ -55,6 +57,16 @@ func _build() -> void:
 
 	for key in SkillDB.SLOTS:
 		_slots.append(_build_slot(bar, String(key)))
+
+	# 대쉬 칸 — 사용자가 "그것도 스킬창에 넣고 쿨타임을 적절히 배치" 라고 했다.
+	# QWER 과 살짝 띄워 붙인다. 그림 스킬이 아니라 **고정 기술**이라 성격이 다르다.
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(14, 0)
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(gap)
+	_dash = _build_slot(bar, "Shift")
+	(_dash["time"] as Label).add_theme_font_size_override("font_size", 20)
+
 	_refresh_all()
 
 
@@ -108,14 +120,16 @@ func _build_slot(parent: Node, key: String) -> Dictionary:
 	key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stack.add_child(key_label)
 
+	# 스킬 이름 — 칸 안쪽 아래에 작게. 예전엔 만들어 놓고 트리에 안 붙여서
+	# 이름이 아예 안 보였고 고아 노드만 쌓였다(QA 6차).
 	var name_label := Label.new()
+	name_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	name_label.offset_top = -18.0
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 12)
-	name_label.modulate = Color(1, 1, 1, 0.7)
+	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.modulate = Color(1, 1, 1, 0.72)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# 칸 아래에 이름을 붙인다
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(name_label)
 
 	return {
 		"key": key, "box": box, "style": style, "icon": icon,
@@ -132,6 +146,9 @@ func _refresh_all() -> void:
 	for s in _slots:
 		var skill: Dictionary = SkillDB.get_slot(String(s["key"]))
 		(s["icon"] as TextureRect).texture = _icon_of(skill)
+		(s["name"] as Label).text = String(skill.get("name", ""))
+	if not _dash.is_empty():
+		(_dash["name"] as Label).text = "대쉬"
 
 
 ## 유저가 그린 마스크를 그대로 아이콘으로 쓴다. 빈 그림이면 없음.
@@ -161,6 +178,30 @@ func _process(_delta: float) -> void:
 		return
 	for s in _slots:
 		_update_slot(s)
+	if not _dash.is_empty():
+		_update_dash()
+
+
+## 대쉬 칸. 그림이 없으므로 준비됐을 때 「⚡」 를 띄운다.
+func _update_dash() -> void:
+	var left: float = _player.dash_cooldown_left()
+	var total: float = _player.dash_cooldown_total()
+	var veil := _dash["veil"] as ColorRect
+	var time := _dash["time"] as Label
+	var style := _dash["style"] as StyleBoxFlat
+
+	if left <= 0.0:
+		veil.visible = false
+		time.text = "⚡"
+		style.border_color = READY_BORDER
+	else:
+		veil.visible = true
+		veil.anchor_top = 1.0 - clampf(left / maxf(total, 0.001), 0.0, 1.0)
+		time.text = ("%.1f" % left) if left < 1.0 else ("%d" % int(ceil(left)))
+		style.border_color = COOL_BORDER
+
+	if _player.is_dashing():
+		style.border_color = CAST_COLOR
 
 
 func _update_slot(s: Dictionary) -> void:

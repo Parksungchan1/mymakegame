@@ -50,6 +50,16 @@ jump={
 ]
 }
 
+; ── 대쉬 (Shift) ──
+; 2026-08-01 사용자 요구. 회피 수단이면서 스킬창에 칸을 갖고 쿨타임이 도는 "다섯 번째 슬롯" 이다.
+; 좌우 Shift 둘 다 잡는다 — 왼손이 방향키에 있으므로 오른쪽 Shift 도 쓰게 된다.
+dash={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194325,"key_label":0,"unicode":0,"location":1,"echo":false,"script":null)
+, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194325,"key_label":0,"unicode":0,"location":2,"echo":false,"script":null)
+]
+}
+
 ; ── 스킬 4슬롯 ──
 skill_q={
 "deadzone": 0.2,

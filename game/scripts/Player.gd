@@ -29,6 +29,14 @@ extends CharacterBody3D
 ## 공중 덤블링 한 바퀴에 걸리는 시간(초). 짧을수록 팽팽 돈다.
 ## 연출이지만 기능도 겸한다 — 2단을 썼는지 눈으로 바로 알 수 있다.
 @export var flip_time: float = 0.42
+
+# ── 대쉬 (Shift) ───────────────────────────────────────────────
+## 2026-08-01 사용자 요구. **회피 수단**이고 스킬창에 칸을 갖는다.
+## 아래 수치는 개발이 임시로 잡은 것이다 — **밸런스는 기획 담당이 정한다.**
+## 확정되면 Balance 로 옮기거나 여기 값을 기획이 준 값으로 갈아끼운다.
+@export var dash_speed: float = 22.0
+@export var dash_time: float = 0.18
+@export var dash_cooldown: float = 3.0
 ## 중력. 현실값(9.8)보다 세야 점프가 쫀득하다.
 @export var gravity: float = 22.0
 ## 진행 방향으로 몸이 도는 속도
@@ -74,12 +82,31 @@ const GROUND_CLEARANCE := 0.08
 @onready var _arm: SpringArm3D = $CamPivot/SpringArm3D
 @onready var _body: Node3D = $Body
 @onready var _muzzle: Marker3D = $Body/Wand/Muzzle
+## 조준 화살표. 아트가 만든 노드라 없을 수도 있다고 보고 안전하게 받는다.
+@onready var _arrow: Node3D = get_node_or_null("Body/AimArrow")
+
+# ── 애니메이션 관절 (아트가 만든 피벗) ────────────────────────
+## 아트 계약: 피벗은 전부 basis 단위행렬이고 **`rotation.x` 양수 = 앞(-Z)으로 돈다.**
+## `Body/Wand` 가 오른쪽 어깨를 겸한다 — 그래서 **한 줄로 팔+손+마법봉이 통째로 올라간다.**
+## (`$Body/Wand/Muzzle` 경로를 지키려고 그 위에 노드를 못 끼웠기 때문)
+@onready var _hip_l: Node3D = get_node_or_null("Body/HipL")
+@onready var _hip_r: Node3D = get_node_or_null("Body/HipR")
+@onready var _shoulder_l: Node3D = get_node_or_null("Body/ShoulderL")
+@onready var _wand_arm: Node3D = get_node_or_null("Body/Wand")
+
+## 걷기 위상(라디안). 속도에 비례해 돌아간다.
+var _step_phase: float = 0.0
+## 시전 모션 진행도(0=안 함, 1=시작). 시간이 흐르며 0 으로 줄어든다.
+var _cast_anim: float = 0.0
+var _cast_anim_time: float = 0.45
 
 ## 슬롯 하나가 들고 있는 것. `_reload_slot()` 이 SkillDB 에서 채운다.
 ## 키: name · damage · range_pt · color · mask · tag · derived(Balance 계산 결과)
 var _slots: Dictionary = {}
 ## 슬롯별 남은 쿨타임(초). 슬롯마다 따로 돈다.
 var _cooldowns: Dictionary = {}
+## 슬롯별 **직전** 전체 쿨타임. 스킬을 갈아끼울 때 "얼마나 식었는지" 비율을 지키는 데 쓴다.
+var _prev_cooldown_total: Dictionary = {}
 
 ## 지금 발동 중인 슬롯("" = 없음). 발동 중에는 다른 스킬도 못 쓴다 —
 ## 네 개를 동시에 캐스팅하면 마법봉이 네 개 필요하다.
@@ -91,11 +118,23 @@ var _double_ready: bool = false
 ## 덤블링 남은 시간(초). 0 보다 크면 도는 중이다.
 var _flip_left: float = 0.0
 
+## 대쉬 남은 시간(초)과 방향. 0 보다 크면 대쉬 중이다.
+var _dash_left: float = 0.0
+var _dash_dir: Vector3 = Vector3.ZERO
+var _dash_cool: float = 0.0
+
+
+## 화면 흔들림. 카메라에 코드로 붙인다 —
+## `Player.tscn` 은 아트 담당 파일이라 개발이 노드를 심지 않는다.
+const SCREEN_SHAKE := preload("res://scripts/ScreenShake.gd")
+var _shake: Node
+
 
 func _ready() -> void:
 	# 시점 조작이 없으니 마우스는 잡지 않는다. 스킬 제작창에서 그대로 쓴다.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_apply_camera_angle()
+	_attach_shake()
 	# 제작창에서 저장하면 곧바로 다음 발사에 반영된다.
 	SkillDB.slot_changed.connect(_on_slot_changed)
 	for slot in SLOT_ACTIONS:
@@ -138,6 +177,42 @@ func _reload_slot(slot: String) -> void:
 		float(entry["damage"]), float(entry["range_pt"]), String(entry["tag"]), metrics)
 	_slots[slot] = entry
 
+	# 🐞 쿨타임 건너뛰기 막기 (QA 6차 실증)
+	# 싼 스킬(쿨 0.6초)을 쏘고 → 제작창에서 그 슬롯을 비싼 스킬(쿨 25.2초)로 바꾸면
+	# 남은 쿨 0.6초만 기다리고 25.2초짜리를 쏠 수 있었다.
+	# **예산 초과 페널티라는 유일한 방어선을 통째로 우회한다.**
+	# 그래서 스킬을 갈아끼우면 남은 쿨을 새 스킬 기준으로 다시 잡는다.
+	# 이미 식은 만큼의 **비율**은 인정한다 — 다 기다린 걸 처음부터 다시 시키면 그건 벌이다.
+	var new_cool: float = float(entry["derived"].get("cooldown", 0.0))
+	var old_left: float = float(_cooldowns.get(slot, 0.0))
+	if old_left > 0.0 and new_cool > 0.0:
+		var old_total: float = maxf(_prev_cooldown_total.get(slot, new_cool), 0.001)
+		var ratio: float = clampf(old_left / old_total, 0.0, 1.0)
+		_cooldowns[slot] = new_cool * ratio
+	_prev_cooldown_total[slot] = new_cool
+
+
+## 카메라에 흔들림 노드를 매단다. 카메라 각도는 건드리지 않고 화면 오프셋만 흔든다.
+func _attach_shake() -> void:
+	var cam := _arm.get_node_or_null("Camera3D") as Camera3D
+	if cam == null:
+		return
+	_shake = SCREEN_SHAKE.new()
+	_shake.name = "ScreenShake"
+	cam.add_child(_shake)
+
+
+## 「쿵」. 적을 쓰러뜨렸을 때 부른다.
+func shake_kill() -> void:
+	if _shake != null:
+		_shake.kill()
+
+
+## 맞혔을 때. 죽인 것보다 훨씬 약하다.
+func shake_hit() -> void:
+	if _shake != null:
+		_shake.hit()
+
 
 ## 고정각을 실제 노드에 반영. 인스펙터에서 값을 바꿔도 다시 부르면 된다.
 func _apply_camera_angle() -> void:
@@ -149,16 +224,107 @@ func _apply_camera_angle() -> void:
 func _physics_process(delta: float) -> void:
 	_move(delta)
 	_tick_skill(delta)
+	_animate(delta)
+
+
+# ── 애니메이션 ────────────────────────────────────────────────
+## 걷기(다리·왼팔 흔들기) · 점프(다리 모으기) · 시전(팔 올렸다 내리치기).
+##
+## 뼈대 애니메이션 리소스를 쓰지 않고 코드로 각도를 준다.
+## 관절이 여섯 개뿐이고 전부 한 축 회전이라, 리소스를 만드는 것보다
+## 여기서 수식으로 도는 게 읽기도 쉽고 속도에 맞춰 늘였다 줄였다 하기도 쉽다.
+const STEP_SWING := 0.62      ## 걸을 때 다리가 앞뒤로 흔들리는 최대 각(라디안)
+const STEP_RATE := 1.45       ## 속도 1m/s 당 걷기 위상이 도는 속도
+const AIR_TUCK := 0.45        ## 공중에서 다리를 모으는 각
+const CAST_LIFT := 1.26       ## 시전 때 팔이 올라가는 최대 각(약 72°)
+const CAST_STRIKE := -0.31    ## 내리칠 때 반대로 넘어가는 각(약 -18°)
+
+
+func _animate(delta: float) -> void:
+	if _cast_anim > 0.0:
+		_cast_anim = maxf(_cast_anim - delta / _cast_anim_time, 0.0)
+
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if is_on_floor():
+		_step_phase += speed * STEP_RATE * delta
+	else:
+		# 공중에선 다리를 멈춘다. 허공에서 걷는 것처럼 보이면 안 된다.
+		_step_phase = lerpf(_step_phase, 0.0, minf(delta * 6.0, 1.0))
+
+	_animate_legs(speed, delta)
+	_animate_arms(delta)
+
+
+## 다리 — 걸으면 앞뒤로 엇갈리고, 공중에선 모은다.
+func _animate_legs(speed: float, delta: float) -> void:
+	if _hip_l == null or _hip_r == null:
+		return
+	var target_l: float
+	var target_r: float
+	if is_on_floor():
+		# 속도가 빠를수록 크게 흔든다. 멈추면 0 으로 잦아든다.
+		var amp: float = STEP_SWING * clampf(speed / move_speed, 0.0, 1.0)
+		target_l = sin(_step_phase) * amp
+		target_r = -target_l
+	else:
+		# 점프 중엔 앞다리를 접고 뒷다리를 편다 — 웅크린 실루엣이 뜬 느낌을 준다.
+		target_l = AIR_TUCK
+		target_r = AIR_TUCK * 0.45
+
+	var k: float = minf(delta * 14.0, 1.0)
+	_hip_l.rotation.x = lerpf(_hip_l.rotation.x, target_l, k)
+	_hip_r.rotation.x = lerpf(_hip_r.rotation.x, target_r, k)
+
+
+## 팔 — 왼팔은 걷기에 맞춰 반대로 흔들고, 오른팔(마법봉)은 시전 모션을 한다.
+## 사용자 요구: "스킬을 날릴 때 팔을 위로 올렸다가 내리는 모션"
+func _animate_arms(delta: float) -> void:
+	var k: float = minf(delta * 14.0, 1.0)
+
+	if _shoulder_l != null:
+		var swing: float = 0.0
+		if is_on_floor():
+			var speed := Vector2(velocity.x, velocity.z).length()
+			# 왼팔은 오른다리와 같은 쪽으로 — 사람이 그렇게 걷는다.
+			swing = -sin(_step_phase) * STEP_SWING * 0.55 * clampf(speed / move_speed, 0.0, 1.0)
+		else:
+			swing = -0.5
+		_shoulder_l.rotation.x = lerpf(_shoulder_l.rotation.x, swing, k)
+
+	if _wand_arm == null:
+		return
+	if _cast_anim > 0.0:
+		_wand_arm.rotation.x = _cast_swing(1.0 - _cast_anim)
+	else:
+		# 시전이 끝나면 걷기에 맞춰 살짝만 흔든다. 마법봉을 든 팔이라 크게 안 흔든다.
+		var idle: float = 0.0
+		if is_on_floor():
+			var speed := Vector2(velocity.x, velocity.z).length()
+			idle = sin(_step_phase) * STEP_SWING * 0.22 * clampf(speed / move_speed, 0.0, 1.0)
+		_wand_arm.rotation.x = lerpf(_wand_arm.rotation.x, idle, k)
+
+
+## 시전 한 동작의 각도 곡선. t 는 0(시작) → 1(끝).
+## 0~55% 올린다 → 잠깐 멈춘다 → 78~100% 내리친다(반대로 살짝 넘어갔다 돌아온다).
+## 멈추는 구간이 있어야 "올렸다"가 눈에 읽힌다. 쭉 이어 돌리면 그냥 팔 젓기로 보인다.
+func _cast_swing(t: float) -> float:
+	if t < 0.55:
+		var u: float = t / 0.55
+		return CAST_LIFT * (1.0 - pow(1.0 - u, 3.0))   # 빠르게 올라갔다 천천히 멈춤
+	if t < 0.78:
+		return CAST_LIFT                                # 정지 — 힘을 모으는 순간
+	var v: float = (t - 0.78) / 0.22
+	return lerpf(CAST_LIFT, CAST_STRIKE, v * v)         # 가속하며 내리침
 
 
 func _move(delta: float) -> void:
 	# 방향키 → 화면 기준 이동. 카메라가 고정각이라 이 기준은 절대 안 바뀐다.
-	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var basis := _pivot.global_transform.basis
-	var dir := (basis.x * input_dir.x + basis.z * input_dir.y)
-	dir.y = 0.0
-	if dir.length_squared() > 0.0:
-		dir = dir.normalized()
+	# 조준도 같은 방향을 쓴다(`aim_direction()`) — 방향키가 곧 조준이다.
+	var dir := _input_direction()
+
+	# 대쉬는 이동 규칙을 통째로 덮어쓴다. 가감속을 태우면 "확" 나가는 맛이 죽는다.
+	if _tick_dash(delta, dir):
+		return
 
 	# 수평 속도만 가감속한다. 수직(중력/점프)은 따로 둔다.
 	var flat := Vector3(velocity.x, 0.0, velocity.z)
@@ -187,6 +353,65 @@ func _move(delta: float) -> void:
 	move_and_slide()
 	_face(dir, delta)
 	_tick_flip(delta)
+	_tick_arrow()
+
+
+## 조준 화살표를 켜고 끈다.
+## 아트가 `$Body/AimArrow` 를 **Body 밑에** 달아줬다 — 그래서 방향을 코드로 돌릴 필요가 없다.
+## `_face()` 가 Body 를 돌리면 화살표도 같이 돈다.
+##
+## 언제 보이나: **방향키를 누르고 있을 때만.** 가만히 서 있을 때도 띄우면 화면이 지저분하고,
+## 어차피 그때는 몸이 보는 쪽이 자명하다.
+## 덤블링 중에는 끈다 — 몸이 통째로 돌아서 화살표가 하늘을 가리킨다.
+func _tick_arrow() -> void:
+	if _arrow == null:
+		return
+	_arrow.visible = _flip_left <= 0.0 and _input_direction().length_squared() > 0.0
+
+
+## 대쉬. true 를 돌려주면 이번 프레임 이동은 대쉬가 책임진다.
+##
+## 방향은 **방향키가 있으면 그쪽, 없으면 보는 쪽**이다.
+## 뒤로 빼는 게 회피의 절반이라 「보는 쪽으로만」은 회피 수단으로 못 쓴다.
+##
+## 중력은 그대로 두되 **아래로 떨어지지는 않게** 잡는다 —
+## 공중 대쉬가 낙하에 먹혀버리면 정작 피할 때 안 듣는다(2단 점프와 같은 이유).
+func _tick_dash(delta: float, input_dir: Vector3) -> bool:
+	if _dash_cool > 0.0:
+		_dash_cool = maxf(_dash_cool - delta, 0.0)
+
+	if _dash_left > 0.0:
+		_dash_left = maxf(_dash_left - delta, 0.0)
+		velocity.x = _dash_dir.x * dash_speed
+		velocity.z = _dash_dir.z * dash_speed
+		velocity.y = maxf(velocity.y, 0.0)   # 대쉬 중에는 가라앉지 않는다
+		move_and_slide()
+		_face(_dash_dir, delta)
+		_tick_flip(delta)
+		return true
+
+	if _dash_cool <= 0.0 and Input.is_action_just_pressed("dash"):
+		var d := input_dir if input_dir.length_squared() > 0.0 else aim_direction()
+		_dash_dir = d.normalized()
+		_dash_left = dash_time
+		_dash_cool = dash_cooldown
+		return true
+
+	return false
+
+
+## 대쉬 쿨타임 — HUD 가 QWER 옆 칸에 그린다.
+func dash_cooldown_left() -> float:
+	return _dash_cool
+
+
+func dash_cooldown_total() -> float:
+	return dash_cooldown
+
+
+## 지금 대쉬 중인가. 연출·무적 판정이 붙으면 여기를 본다.
+func is_dashing() -> bool:
+	return _dash_left > 0.0
 
 
 ## 2단 점프를 쓰면 몸이 앞으로 한 바퀴 돈다.
@@ -217,13 +442,37 @@ func _face(dir: Vector3, delta: float) -> void:
 	_body.rotation.y = lerp_angle(_body.rotation.y, target, turn_speed * delta)
 
 
-## 캐릭터가 보고 있는 방향(수평). 스킬은 이쪽으로 나간다.
+## 스킬이 날아갈 방향.
+##
+## 2026-08-02 사용자 확정: **"스킬을 쓸 때는 움직임 키패드로 정할 수 있는 거지"**
+## → **방향키가 곧 조준이다.** 누르고 있는 방향으로 **즉시** 나간다.
+##
+## 몸이 보는 방향을 쓰면 안 되는 이유: `_face()` 가 `turn_speed` 로 **부드럽게 돌기 때문에**
+## 방향을 꺾은 직후에 쏘면 몸이 아직 안 돌아서 **엉뚱한 데로 나간다.**
+## 조준은 늦으면 안 된다 — 누른 대로 나가야 내가 맞힌 게 된다.
+##
+## 방향키를 안 누르고 있으면(제자리) 몸이 보는 쪽으로 나간다.
 func aim_direction() -> Vector3:
+	var keyed := _input_direction()
+	if keyed.length_squared() > 0.0:
+		return keyed
+
 	var forward := -_body.global_transform.basis.z
 	forward.y = 0.0
 	if forward.length_squared() <= 0.0:
 		return Vector3.FORWARD
 	return forward.normalized()
+
+
+## 지금 누르고 있는 방향키 → 화면 기준 방향. 아무것도 안 누르면 ZERO.
+func _input_direction() -> Vector3:
+	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var basis := _pivot.global_transform.basis
+	var dir := (basis.x * input_dir.x + basis.z * input_dir.y)
+	dir.y = 0.0
+	if dir.length_squared() <= 0.0:
+		return Vector3.ZERO
+	return dir.normalized()
 
 
 # ── 스킬 발사 ────────────────────────────────────────────────
@@ -256,6 +505,11 @@ func _tick_skill(delta: float) -> void:
 		# NaN 이 들어오면 어떤 비교도 false 라 발동이 영영 안 풀리고
 		# 스킬이 완전히 잠긴다. 망가진 값은 여기서 걸러낸다.
 		_cast_left = _safe_time(_derived(slot).get("cast_time", 0.3), 0.3)
+		# 팔 올렸다 내리치는 모션. **발동 시간에 맞춰 늘였다 줄인다** —
+		# 발동이 0.12초인 싼 스킬과 1.1초인 비싼 스킬이 같은 속도로 움직이면
+		# 모션이 수치와 따로 논다. 내리치는 순간이 곧 발사 순간이어야 한다.
+		_cast_anim_time = maxf(_cast_left, 0.18)
+		_cast_anim = 1.0
 		break
 
 

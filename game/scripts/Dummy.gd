@@ -71,9 +71,24 @@ func take_damage(amount: float) -> bool:
 	_refresh()
 	if hp <= 0.0:
 		_fall()
+		_tell_player("shake_kill")   # 쓰러뜨렸을 때 「쿵」
 	else:
 		_flash()
+		_tell_player("shake_hit")    # 맞혔을 때는 훨씬 약하게
 	return true
+
+
+## 화면을 흔들어 달라고 플레이어에게 알린다.
+## 허수아비가 카메라를 직접 아는 건 이상하고, 나중에 봇이 들어와도 같은 창구를 쓴다.
+func _tell_player(what: String) -> void:
+	var world := get_parent()
+	if world != null:
+		world = world.get_parent()
+	if world == null:
+		return
+	var player := world.get_node_or_null("Player")
+	if player != null and player.has_method(what):
+		player.call(what)
 
 
 func _refresh() -> void:
