@@ -170,11 +170,14 @@ size = Vector3(1, 18, 60)
 size = Vector3(1, 18, 60)
 
 ; 걸레받이 — 고정 카메라에서 바닥과 벽의 경계를 읽게 해주는 선이다.
+; 2026-08-01: 두께 0.4 → 0.06 으로 얇게 깎았다. 벽 판정면은 |29.5| 인데 걸레받이가
+; 0.4 나 튀어나와 있어서 벽에 붙어 서면 **캐릭터가 걸레받이 안에 박혀 보였다**.
+; 화면에서 읽히는 건 세로면(높이 1.8)이지 두께가 아니라, 얇게 해도 선은 그대로 남는다.
 [sub_resource type="BoxMesh" id="mesh_trim_x"]
-size = Vector3(60, 1.8, 0.4)
+size = Vector3(60, 1.8, 0.06)
 
 [sub_resource type="BoxMesh" id="mesh_trim_z"]
-size = Vector3(0.4, 1.8, 60)
+size = Vector3(0.06, 1.8, 60)
 
 [sub_resource type="BoxMesh" id="mesh_rug"]
 size = Vector3(22, 0.12, 18)
@@ -432,34 +435,46 @@ shape = SubResource("col_wall_z")
 [node name="Decor" type="Node3D" parent="."]
 
 [node name="TrimNorth" type="MeshInstance3D" parent="Decor"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -29.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -29.47)
 mesh = SubResource("mesh_trim_x")
 surface_material_override/0 = SubResource("mat_trim")
 
 [node name="TrimSouth" type="MeshInstance3D" parent="Decor"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 29.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 29.47)
 mesh = SubResource("mesh_trim_x")
 surface_material_override/0 = SubResource("mat_trim")
 
 [node name="TrimWest" type="MeshInstance3D" parent="Decor"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.3, 0.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.47, 0.9, 0)
 mesh = SubResource("mesh_trim_z")
 surface_material_override/0 = SubResource("mat_trim")
 
 [node name="TrimEast" type="MeshInstance3D" parent="Decor"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.3, 0.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.47, 0.9, 0)
 mesh = SubResource("mesh_trim_z")
 surface_material_override/0 = SubResource("mat_trim")
 
 ; 러그 — 가운데가 "여기가 싸우는 자리"라고 알려주는 바닥 표식.
 ; 차가운 회청색이라 따뜻한 색 투사체가 위에서 잘 튄다.
+;
+; 🔴 2026-08-01 — 사용자 보고 "발이 배경에 들어가 있어" 의 **진짜 원인이 이 두 노드였다.**
+; 러그는 Decor(판정 없음)라 캐릭터는 러그를 안 밟고 **바닥(y=0)** 에 선다.
+; 그런데 러그 윗면이 0.12 / 0.19 였다 → 신발(밑창 0.005, 높이 0.09)이 통째로 잠긴다.
+; 렌더로 확인: 스폰 지점에서 신발이 아예 안 보이고 종아리가 러그 면에서 잘려 있었다.
+; 조치 — 러그를 바닥 속으로 밀어 넣어 **윗면만 0.004 / 0.008 로 살짝 남긴다.**
+; 옆면은 바닥 박스 안에 묻히므로 화면에는 "바닥에 깔린 평평한 러그"로만 보인다.
+; (0 이 아니라 4mm 를 띄운 것은 바닥 윗면과 같은 평면이 되면 Z-파이팅이 나기 때문.
+;  7m 거리에서 깊이 분해능은 0.1mm 미만이라 4mm 면 충분히 안전하다.)
+; 신발 밑창은 Player.tscn 에서 0.015 로 올렸다 → 러그 위 여유 7mm.
+; ⚠ 러그에 판정을 주는 방법도 있었지만, 그러면 아레나 한가운데에 12cm 단차가
+;    생겨 점프·엄폐 높이 기준(1.1 / 1.2m)에 없던 변수가 끼어든다. 그래서 안 했다.
 [node name="Rug" type="MeshInstance3D" parent="Decor"]
-transform = Transform3D(0.9945, 0, -0.1045, 0, 1, 0, 0.1045, 0, 0.9945, 0, 0.06, 4)
+transform = Transform3D(0.9945, 0, -0.1045, 0, 1, 0, 0.1045, 0, 0.9945, 0, -0.056, 4)
 mesh = SubResource("mesh_rug")
 surface_material_override/0 = SubResource("mat_rug")
 
 [node name="RugInner" type="MeshInstance3D" parent="Decor"]
-transform = Transform3D(0.9945, 0, -0.1045, 0, 1, 0, 0.1045, 0, 0.9945, 0, 0.13, 4)
+transform = Transform3D(0.9945, 0, -0.1045, 0, 1, 0, 0.1045, 0, 0.9945, 0, -0.052, 4)
 mesh = SubResource("mesh_rug_inner")
 surface_material_override/0 = SubResource("mat_rug_inner")
 
