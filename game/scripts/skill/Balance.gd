@@ -591,6 +591,244 @@ const DASH_IFRAME: float = 0.0
 
 
 # ─────────────────────────────────────────────────────────────
+# 효과 옵션 (스킬 하나에 0~1개) — 2026-08-02, 사용자 직접 요구로 신설
+#
+# 사용자 원문:
+#   "스킬을 커스텀 할 수있는게 그림 뿐만 아니라 여러가지 옵션들이 들어가야할 거 같아.
+#    예를 들어 그림을 그리고 그걸 날릴 때 대폭발, 매혹(상대가 맞으면 아리의 e 스킬처럼
+#    매혹당하는 것), 실드(내 몸에 두를 수 있는 형태로 나타나며 한번의 공격을 데미지
+#    어느정도를 막아준다던지), 반사 옵션 등 다양한 옵션들을 추가해서 qwer 스킬에
+#    배정하고 그걸 넣으면 해당 스킬이 쓰일 수 있도록"
+#
+# ─────────────────────────────────────────────────────────────
+# 【효과는 왜 기존 「가격 판정 규칙」으로 값을 못 매기나】
+#
+# 기존 규칙(FORM_COST_* 블록)은 **유효 명중 폭** 또는 **정조준 평균 데미지**가 바뀌는지를
+# 본다. 그런데 효과 5종은 **하나도 그 둘을 안 바꾼다** —
+#   · 실드·반사는 애초에 상대에게 날아가지 않는다(투사체가 없다)
+#   · 매혹·흡혈·대폭발은 **명중한 뒤**에 일어난다(폭은 이미 다 쓰였다)
+# 기존 규칙을 그대로 대면 다섯 개 전부 「0pt」가 나오는데 그건 명백히 거짓이다.
+# → **효과 축에는 새 통화가 필요하다.**
+#
+# 【신설 — 효과 가격 판정 규칙 (3단계)】
+#   1. 그 효과의 이득을 **HP 로 환산할 수 있는가?**
+#      예 → **HP 통화**로 값을 매긴다: `1 HP = 1 / DAMAGE_SCALE = 2.5 pt` (아래 HP_TO_PT).
+#           지불 방식은 둘 중 하나 — **데미지 출력 감쇠**(같은 스킬 안에서 상쇄) 또는
+#           **`cost` 가산항**. 어느 쪽이든 통화는 하나로 유지된다.
+#      아니오 → 2번.
+#   2. 이득이 **내 것이 아니라 팀 것인가?** (CC · 정보)
+#      예 → **값을 못 매긴다.** 가격이 아니라 **상한**(지속·대상 수·면역·조기 해제)으로
+#           통제하고 **4단계 봇 대전에서 실측한다.** 값을 지어내고 「형평성 확인됨」이라고
+#           쓰지 않는다. (기모으기 GROUND_RADIUS_MULT 와 같은 처리다)
+#   3. 이득도 손해도 **위치·시간뿐이고 HP 도 명중률도 안 바꾸는가?**
+#      예 → **무료(0pt).** 발사 형태 4종이 전부 이 칸에 있다.
+#
+# 【HP 통화가 새 계수를 발명한 게 아닌 이유】
+# `DAMAGE_SCALE = 0.40` 은 「슬라이더 1pt → 실데미지 0.40」이라는 **이미 확정된 환율**이다.
+# 그 역수 2.5 는 「HP 1 을 데미지로 사려면 슬라이더 몇 pt 인가」일 뿐이다.
+# 가격 판정 규칙이 못박은 「새 계수를 발명하지 않고 기존 슬라이더로 환산한다」를 그대로 지킨다.
+#
+# ─────────────────────────────────────────────────────────────
+# 【🔴 정리 — 가산항이 붙어도 10,000 조합 검산이 왜 자동으로 보존되나】
+#
+# 지난 회차에 「가산 항에 값을 넣으면 10,000 조합 검산이 통째로 무효가 된다」고 적었다.
+# 그 문제를 여기서 닫는다.
+#
+#   cost = 데미지 + 범위×RANGE_COEF + E   이므로
+#   **(D, R, 효과비용 E) 의 cost · spent_ratio · over_ratio · cooldown · cast_time 은
+#     (D+E, R, 0) 과 완전히 같다.** [실행 검증: 10,000 조합 최대 오차 0.000000000000]
+#   그런데 출력 데미지는 `damage_out(D)` 로 **더 작다**(D+E 가 아니다).
+#   → 형평성 지표 `(데미지÷쿨) × 판정반경` 이 (D+E, R) 조합보다 **항상 작거나 같다.**
+#   → 「초과가 이득인 조합 0개」가 **재실행 없이 보존된다.**
+#
+# **단, 조건이 하나 있다: 효과의 실제 HP 이득이 E 를 안 넘어야 한다.**
+# 그것이 위 HP 통화 규칙이 보장하는 것이고, 그래서 다시 돌려야 하는 검산은
+# 「효과 하나의 HP 이득이 정가를 넘는가」뿐 — **효과당 한 줄 계산**이다.
+# (그래도 흡혈은 실제로 10,000 조합을 다시 돌렸다. 결과는 아래 상수 블록에 적어 뒀다)
+#
+# ─────────────────────────────────────────────────────────────
+# 【⛔ 효과끼리 조합하지 않는다. 스킬 하나에 효과는 「없음」 또는 「1개」다(라디오)】
+# 발사 형태에서 조합을 기각한 것과 **같은 잣대**다. 그리고 효과 쪽은 이유가 하나 더 있다:
+# **효과 조합의 값은 개별 값의 합이 아니다**(매혹으로 묶고 때리는 것은 둘의 합보다 세고,
+# 실드+반사는 서로 상쇄된다). 합이 아니면 **HP 통화로 값을 매길 수 없고**, 가격 규칙 자체가
+# 무너진다. → **조합은 스킬 안에서 열지 않고 QWER 네 칸 사이에서 연다.**
+# 매혹 Q → 대폭발 W 로 이어치는 순서와 타이밍이 이 게임의 조합 층이다.
+# 검증 비용이 곱이 아니라 합으로 남는다.
+# ─────────────────────────────────────────────────────────────
+
+const EFFECT_NONE := "없음"
+const EFFECT_BLAST := "대폭발"
+const EFFECT_CHARM := "매혹"
+const EFFECT_LIFESTEAL := "흡혈"
+const EFFECT_SHIELD := "실드"
+const EFFECT_REFLECT := "반사"
+const EFFECTS: PackedStringArray = [
+	EFFECT_NONE, EFFECT_BLAST, EFFECT_CHARM, EFFECT_LIFESTEAL,
+	EFFECT_SHIELD, EFFECT_REFLECT,
+]
+
+## **자기 효과** — 투사체를 안 쏘고 자신에게 즉시 건다. 그림은 몸에 두르는 문양이 된다.
+## 이 둘은 **동시에 하나만** 켤 수 있다(실드 켠 채로 반사를 못 켠다. 반대도 같다).
+const SELF_EFFECTS: PackedStringArray = [EFFECT_SHIELD, EFFECT_REFLECT]
+
+## HP 1점을 예산으로 환산한 값. `1 / DAMAGE_SCALE` = 2.5pt.
+## 새 계수가 아니라 **기존 환율의 역수**다(위 블록 주석 참조).
+const HP_TO_PT: float = 2.5
+
+# ── 대폭발 (넉백) ──────────────────────────────────────────────
+## 명중한 대상을 투사체 진행 방향으로 미는 거리(m).
+##
+## 【3.0 을 고른 근거 — 「가둘 수 없어야 한다」에서 거꾸로 풀었다】
+##   가장 싼 스킬의 쿨이 0.6초다. 그 사이에 걸어서(6.0 m/s) 갈 수 있는 거리는 **3.6m**.
+##   넉백이 그보다 작아야 **연타로 상대를 계속 밀어 가두는 것이 불가능**하다.
+##   3.0 < 3.6 이므로 밀린 쪽이 항상 되돌아올 수 있다. [실행 검증]
+##   위쪽으로도 근거가 있다: 대쉬 4.0m 보다 작다 — **넉백 한 번이 상대의 회피 한 번보다
+##   작아야** 「위치를 조작한다」가 「회피를 대신해 준다」가 되지 않는다.
+##
+## 【🔴 넉백은 조작을 안 뺏는다 — 축을 안 섞는 것이 중요하다】
+## 밀리는 동안에도 이동 입력·점프·대쉬가 전부 살아 있다. 지면을 미끄러질 뿐 공중으로 안 뜬다.
+## 조작 정지를 붙이는 순간 그것은 **CC** 이고, CC 는 아래 매혹의 면역·조기 해제 규칙 아래
+## 있어야 한다. 무료(0pt) 효과가 유료 통제 대상을 몰래 갖는 것을 막는다.
+const BLAST_KNOCKBACK: float = 3.0
+## 밀리는 데 걸리는 시간(초). `DASH_TIME`(0.18)보다 짧게 잡아 대쉬보다 급하게 보이게 한다.
+const BLAST_KNOCK_TIME: float = 0.15
+
+# ── 매혹 (CC) ─────────────────────────────────────────────────
+## 【🔴 이 게임에서 가장 위험한 효과다. 값이 아니라 상한으로 통제한다.】
+## 조작을 뺏는 효과는 「맞으면 아무것도 못 한다」가 되기 쉽고, 이득이 **내 것이 아니라
+## 팀 것**이라 HP 통화로 값을 못 매긴다(위 판정 규칙 2번). 그래서 안전장치가 네 겹이다.
+
+## 매혹 지속(초). 이동·점프·대쉬·스킬이 **전부** 잠긴다.
+##
+## 【0.8 의 근거 — 「회피 기회를 몇 번 뺏는가」에서 잡았다】
+##   실데미지 상한 40 · HP 100 이라 죽기까지 3대, 즉 **회피 기회가 두 번**이다.
+##   0.8초는 그중 **한 번**을 뺏는 크기다(스킬 하나를 피하는 데 드는 시간 = 발동 0.13~1.10초
+##   + 비행). 두 번을 다 뺏으면 「맞았다 → 끝」이 되어 DAMAGE_SCALE 0.40 을 넣은 이유가 사라진다.
+##   [실행] 기본 스킬로 이어치면 0.8초 안에 **정확히 2발**이 확정된다
+##   (Q 0.31s +8.8 → W 0.76s +18.0 = 누적 26.8HP). 3발째는 안 들어간다.
+##
+## 【일부만 잠그지 않는 이유】 「점프는 되는데 대쉬는 안 된다」류는 유저가 무엇이 잠겼는지
+## 못 읽는다. 이 프로젝트에서 「화면이 실제와 다르다」가 다섯 번 재발했다.
+## **전부 잠그고 짧게**가 읽기 쉽다. 단 **이미 진행 중인 대쉬는 끝까지 간다**
+## (0.18초. 공중에서 얼어붙으면 버그로 보인다), 그리고 **쿨타임은 계속 돈다**
+## (대쉬 취소 규칙과 같은 정신 — 벌을 두 번 주지 않는다).
+const CHARM_DURATION: float = 0.8
+
+## 매혹당한 대상이 그 뒤로 매혹에 걸리지 않는 시간(초).
+##
+## 【6.0 의 근거 — 「QWER 네 칸을 다 매혹으로 채우면 영구 CC 인가」를 막는 값】
+##   가장 싼 스킬의 쿨이 0.6초다. 네 칸이면 최소 재사용 간격이 **2.4초**.
+##   면역이 그보다 길어야 연속 매혹이 **구조적으로** 불가능하다. 6.0 은 그 2.5배다.
+##   위쪽 근거: 사망 후 부활 2.0초 + 복귀 시간과 같은 자릿수라 「한 판에 한 번씩」으로 읽힌다.
+const CHARM_IMMUNE: float = 6.0
+
+## 매혹 중 **누적으로 이만큼 데미지를 받으면 즉시 풀린다**(조기 해제).
+##
+## 【🔴 이것이 5v5 즉사 콤보를 막는 유일한 장치다】
+##   지속·면역만으로는 「팀 넷이 0.8초 안에 몰아친다」를 못 막는다. 20HP 는
+##   **최대 한 방(40)의 절반이자 HP 의 20%** 라 「한 대 크게 맞으면 정신이 든다」로 읽힌다.
+##   [실행] 기본 스킬 이어치기에서 **두 번째 타격이 곧바로 이 선을 넘는다**
+##   (Q 8.8 → W 26.8 / Q 8.8 → E 20.8). 즉 매혹으로 확정되는 것은 실질 **2발**이다.
+##   부수 효과: 「매혹해 놓고 때리지 않고 위치를 잡는」 플레이가 생긴다 — 그게 이 축의 재미다.
+const CHARM_BREAK_DAMAGE: float = 20.0
+
+## 매혹 스킬의 **데미지 출력 배수.** 이것이 매혹의 「가격」이다.
+##
+## 【0.5 는 확정값이 아니라 **실측 전 초기값**이다 — 명시해 둔다】
+##   CC 의 이득 = (1 − 평균 명중률) × 확정되는 후속 데미지. **평균 명중률을 아무도 안 쟀다.**
+##   명중률 0.5 를 가정하면 이득이 대략 1발치이고, 데미지 절반을 포기하는 손해가
+##   0.5발치다 — **아직 매혹 쪽이 이득일 가능성이 높다.**
+##   → **4단계 재검증 항목.** 재는 법까지 정해 뒀다: 매혹을 낀 QWER 와 안 낀 QWER 로
+##      같은 봇을 죽이는 데 걸린 시간(TTK)을 비교한다. 차이가 없으면 0.5 가 맞고,
+##      매혹 쪽이 빠르면 더 깎는다.
+##   ⚠ **지금 봇으로는 못 잰다** — `Bot.gd` 는 점프도 대쉬도 안 하고 스트레이프만 한다.
+##      회피를 안 하는 상대에게서 「회피를 뺏는」 효과의 값은 **정의상 0 으로 측정된다.**
+##      개발 요청에 「봇에 대쉬를 넣어라」를 올린 이유가 이것이다.
+const CHARM_DAMAGE_MULT: float = 0.5
+
+## 면역 중에 매혹을 또 맞으면 **둔화로 격하**된다. 이동속도 배수와 지속(초).
+## 「맞았는데 아무 일도 안 일어난다」의 허탈함을 없애면서 무한 CC 는 막는다.
+## 둔화는 조작을 안 뺏으므로 면역 대상이 아니다(축을 안 섞는다 — 넉백과 같은 이유).
+const CHARM_SLOW_MULT: float = 0.5
+const CHARM_SLOW_TIME: float = 0.8
+
+# ── 흡혈 ──────────────────────────────────────────────────────
+## 명중해서 넣은 실데미지의 이 비율만큼 시전자가 회복한다.
+##
+## 【이것이 `effect_cost` 가 0 이 아닌 **유일한** 효과다 — HP 통화의 실증 사례】
+##   회복 H = 0.40 × 실데미지. HP 통화로 환산하면 `H × HP_TO_PT = 0.40 × 데미지 슬라이더`.
+##   → **cost 가산항 = 데미지 × 0.40.** 새 계수가 아니라 이 비율 그대로다.
+##   [실행 10,000 조합] cost(D,R,0.4D) 와 cost(1.4D,R,0) 의 오차 0.000000000000,
+##   쿨타임 오차 0.000000000000. **HP 처리량(데미지+회복) 최강 4.4942 = 기존 합법 최강과 동일.**
+##   기준선을 넘는 조합 **0개**, 초과 예산이 이득인 조합 **0개**.
+##   → **정확히 정가다.** 그리고 실제로는 HP 가 가득 찼을 때 회복이 버려지므로
+##      **정가보다 비싸게 사는 쪽**이다 — 형평성이 나에게 불리한 방향이라 안전하다.
+const LIFESTEAL_RATIO: float = 0.40
+
+# ── 자기 효과 (실드 · 반사) — 투사체를 안 쏜다 ──────────────────
+## 【데미지·범위 슬라이더가 무엇을 사는가 — 재해석의 근거】
+##   · **데미지 슬라이더 → 흡수량(HP).** 8회차에 「슬라이더 = 이 스킬에 예산을 얼마나
+##     넣었나」로 재정의해 뒀다. 그 예산을 데미지로 받느냐 HP 로 받느냐만 다르다.
+##     HP 통화로 **「40 데미지를 넣는 것」과 「40 데미지를 안 맞는 것」이 같은 값**이므로
+##     환산 계수가 1.0 이고, 그래서 **`effect_cost` 가 0 이다** — 데미지 슬라이더가 이미 냈다.
+##   · **범위 슬라이더 → 지속시간 + 발동시간 + 쿨타임**(뒤 둘은 기존 공식 그대로).
+##     오래 켜 두려면 느리게 켜야 한다 = 제로섬.
+##   · 그림은 **겉모습 전용**이다. 태그는 계속 판정돼 제작창에 뜨지만 전투에 안 쓴다.
+##     (태그별 실드 변주 — 둥긂=전방위 구 / 길쭉함=전방 벽 — 은 **4단계 이후 재상정**)
+##   · `hitbox` 는 계산은 되지만 안 쓰인다. **기존 검산이 한 자리도 안 흔들리는 이유가 이것이다.**
+
+## 실드 흡수량 = `damage_out(슬라이더) × 이 값`. 1.0 = 「내가 넣을 수 있었던 데미지만큼 막는다」.
+## 【1.0 인 이유와 그 한계】 HP 통화상 정확히 등가다. 다만 「내가 안 맞을 수도 있는 데미지」와
+## 「내가 확실히 얻는 HP」의 값이 정말 같은지는 **표적이 실제로 어떻게 싸우는지 없이는 못 잰다.**
+## `GROUND_RADIUS_MULT 1.0` 과 똑같이 **1.0 에서 시작하고 4단계에서 잰다.**
+const SHIELD_ABSORB_MULT: float = 1.0
+const SHIELD_DUR_MIN: float = 2.0   ## 범위 1 일 때 지속(초)
+const SHIELD_DUR_MAX: float = 8.0   ## 범위 100 일 때 지속(초)
+## 지속시간 상한을 **쿨타임에도** 건다: 지속 ≤ 쿨 × 이 값. 길이 상한 3중 장치와 같은 정신이다.
+## [실행 10,000 조합] 이 상한이 없으면 「데미지 1 · 범위 100」이 쿨 4.41초에 지속 8초
+## = **상시 실드**가 된다(흡수는 0.4HP 라 무의미하지만 상태가 상시가 되는 것이 나쁘다).
+## 걸면 **한 칸으로는 가동률이 60% 를 절대 못 넘는다.**
+const SHIELD_UPTIME_MAX: float = 0.60
+
+## 반사 흡수 상한 = `damage_out(슬라이더) × 이 값`, 그리고 **막은 만큼 그대로 되돌린다.**
+##
+## 【🔴 0.5 인 이유 — 검산이 잡아낸 진짜 구멍이다】
+##   처음에는 「흡수는 전액(1.0) + 되돌림은 절반」으로 잡았다. [실행] HP swing 을 재 보니
+##   같은 예산 데미지 스킬의 **1.50배**였다(범위 전 구간에서 정확히 1.50). 정가가 아니다.
+##   흡수를 절반으로 내리고 「막은 만큼 되돌린다」로 바꾸면
+##   swing = 0.5·D + 0.5·D = **1.00배** — 정확히 정가가 된다. [실행 확인]
+##   그리고 이 쪽이 유저 직관과도 같다: **「막은 만큼 돌려준다.」**
+##
+## 【실드와 무엇이 다른가 — 숫자가 아니라 플레이가 다르다】
+##   실드: 흡수 전액 · **여러 발**에 걸쳐 소진 · 언제 맞아도 만점 → **안정**
+##   반사: 흡수 절반 + 되돌림 · **딱 한 발**에 소진 · 큰 한 방을 읽었을 때만 만점 → **예측**
+##   HP 통화로는 값이 같고, 요구하는 실력이 다르다.
+const REFLECT_ABSORB_MULT: float = 0.5
+const REFLECT_DUR_MIN: float = 0.8   ## 범위 1 일 때 지속(초)
+const REFLECT_DUR_MAX: float = 2.5   ## 범위 100 일 때 지속(초)
+## 반사는 「날아오는 것을 보고 켜는」 것이라 실드보다 훨씬 짧아야 예측이 실력이 된다.
+## [실행] 한 칸 가동률 상한 30%. 범위 50 스킬의 비행 시간이 약 1.05초이므로
+## 지속 0.8~2.5초는 **「보고 켠다」가 성립하는 최소 창**이다.
+const REFLECT_UPTIME_MAX: float = 0.30
+
+## 【반사의 상성 — 카운터가 이미 존재한다. 설계상 중요하다】
+##   반사되는 것: 직사 · 연발 · 차징 (전부 투사체)
+##   반사 안 되는 것: **기모으기(지면 원 낙하)** — 투사체가 아니라 지면에 떨어진다.
+##   그리고 기모으기는 예고 0.8초가 있어 **대쉬로 피해진다.**
+##   → 반사 ← 기모으기 ← 대쉬 ← 직사 의 **가위바위보**가 생긴다.
+##   「반사가 있으면 원거리가 무의미해지는가」의 답이 이것이다: 아니다.
+##   반사는 **1회 · 흡수 절반 · 한 칸 가동률 30% 이하**이고, 그 위에 반사가 안 통하는 형태가 있다.
+## ⚠ **되돌린 투사체는 다시 반사되지 않는다.** 핑퐁 무한 루프 차단(개발이 플래그 한 개로 막는다).
+
+## 효과의 예산 가산 비용. 흡혈만 0 이 아니다(위 LIFESTEAL_RATIO 블록 참조).
+const EFFECT_COST_NONE: float = 0.0
+const EFFECT_COST_BLAST: float = 0.0     ## 위치 교환은 제로섬. 판정 규칙 3번
+const EFFECT_COST_CHARM: float = 0.0     ## 데미지 출력 감쇠로 지불한다. 판정 규칙 2번
+const EFFECT_COST_SHIELD: float = 0.0    ## 데미지 슬라이더가 곧 흡수량. 판정 규칙 1번
+const EFFECT_COST_REFLECT: float = 0.0   ## 같음
+
+
+# ─────────────────────────────────────────────────────────────
 # 1. 그림(마스크) → 지표 4개
 # ─────────────────────────────────────────────────────────────
 
@@ -882,6 +1120,31 @@ func form_cost(delivery: String = DELIVERY_DIRECT) -> float:
 			return FORM_COST_DIRECT
 
 
+## 【2026-08-02 신설】 효과 옵션의 예산 가산 비용.
+## **흡혈만 0 이 아니다** — 회복량을 HP 통화로 환산한 값(`데미지 × LIFESTEAL_RATIO`)이다.
+## 나머지 넷이 0 인 이유는 각각 다르다(효과 상수 블록의 `EFFECT_COST_*` 주석 참조):
+## 대폭발은 제로섬, 매혹은 데미지 출력 감쇠로 지불, 실드·반사는 데미지 슬라이더가 곧 값이다.
+func effect_cost(effect: String = EFFECT_NONE, damage: float = 0.0) -> float:
+	match effect:
+		EFFECT_LIFESTEAL:
+			return clampf(damage, 1.0, 100.0) * LIFESTEAL_RATIO
+		EFFECT_BLAST:
+			return EFFECT_COST_BLAST
+		EFFECT_CHARM:
+			return EFFECT_COST_CHARM
+		EFFECT_SHIELD:
+			return EFFECT_COST_SHIELD
+		EFFECT_REFLECT:
+			return EFFECT_COST_REFLECT
+		_:
+			return EFFECT_COST_NONE
+
+
+## 그 효과가 **자기 효과**(투사체를 안 쏘고 자신에게 건다)인가.
+func is_self_effect(effect: String) -> bool:
+	return SELF_EFFECTS.has(effect)
+
+
 ## 이 데미지에서 예산을 넘기지 않는 최대 범위값
 func max_range_for(damage: float) -> float:
 	return clampf((BUDGET - damage) / RANGE_COEF, 1.0, 100.0)
@@ -963,7 +1226,16 @@ func derive(damage: float, range_pt: float, tag: String, m: Dictionary = {},
 	if not DELIVERIES.has(delivery):
 		delivery = DELIVERY_DIRECT
 
-	var cost := cost_of(damage, range_pt, form_cost(delivery))
+	var effect: String = String(opts.get("effect", EFFECT_NONE))
+	if not EFFECTS.has(effect):
+		effect = EFFECT_NONE
+	# 자기 효과(실드·반사)는 투사체를 안 쏘므로 발사 형태가 의미가 없다.
+	# 「직사(즉시)」로 잠근다 — 차징 실드는 수학은 성립하지만 4단계 이후 재상정이다.
+	if is_self_effect(effect):
+		delivery = DELIVERY_DIRECT
+
+	var cost := cost_of(damage, range_pt,
+			form_cost(delivery) + effect_cost(effect, damage))
 	var leftover: float = maxf(BUDGET - cost, 0.0)
 	var budget_ratio := cost / BUDGET
 	var spent_ratio: float = clampf(budget_ratio, 0.0, 1.0)
@@ -1015,8 +1287,21 @@ func derive(damage: float, range_pt: float, tag: String, m: Dictionary = {},
 		"damage_out": damage_out(damage),
 		# 【2026-08-01】 유저가 고른 발사 형태의 전투 파라미터 묶음.
 		# opts 를 안 넘기면 「직사」라 종전 동작과 완전히 같다(아래 form_of 참조).
-		"form": form_of(opts, cast_time, cooldown, box),
+		# 자기 효과일 때 위에서 「직사」로 잠근 결과가 form 에도 반영돼야 한다.
+		# (opts 를 그대로 넘기면 제작창이 「기모으기 실드」라는 없는 물건을 띄운다 —
+		#  이 프로젝트에서 「화면이 실제와 다르다」가 이미 다섯 번 재발했다)
+		"form": form_of(_with_delivery(opts, delivery), cast_time, cooldown, box),
+		# 【2026-08-02】 유저가 고른 효과 옵션의 전투 파라미터 묶음.
+		# opts 를 안 넘기면 「없음」이라 모든 값이 중립이다(아래 effect_of 참조).
+		"effect": effect_of(effect, damage, range_pt, cooldown),
 	}
+
+
+## opts 를 복사해 delivery 만 갈아끼운다(원본은 안 건드린다).
+func _with_delivery(opts: Dictionary, delivery: String) -> Dictionary:
+	var out: Dictionary = opts.duplicate()
+	out["delivery"] = delivery
+	return out
 
 
 ## 【2026-08-01 신설】 유저가 고른 발사 형태 → 전투에 쓸 파라미터 묶음.
@@ -1065,6 +1350,89 @@ func form_of(opts: Dictionary, cast_time: float, _cooldown: float,
 			out["radius"] = effective_width(box) * GROUND_RADIUS_MULT
 			out["aimed"] = true
 	return out
+
+
+## 【2026-08-02 신설】 유저가 고른 효과 옵션 → 전투에 쓸 파라미터 묶음.
+##
+## 반환 키:
+##   effect         효과 이름(EFFECT_*)
+##   is_self        true 면 **투사체를 안 쏜다.** 즉시 자신에게 건다
+##   damage_mult    이 스킬의 데미지 출력 배수(매혹만 0.5, 나머지 1.0)
+##   knockback      명중 시 미는 거리(m). 대폭발만 > 0
+##   knock_time     미는 데 걸리는 시간(초)
+##   charm_time     매혹 지속(초). 매혹이 아니면 0
+##   charm_immune   매혹 뒤 면역 시간(초)
+##   charm_break    매혹 조기 해제 누적 데미지(HP)
+##   slow_mult      면역 중 재적용 시 이동속도 배수
+##   slow_time      그 둔화 지속(초)
+##   lifesteal      명중 시 회복 비율(0~1). 흡혈만 > 0
+##   absorb         자기 효과의 흡수량(HP). 실드·반사만 > 0
+##   duration       자기 효과 지속(초)
+##   reflect        true 면 막은 만큼 시전자에게 되돌린다
+##
+## ⚠ **이 함수는 히트박스도 유효 명중 폭도 안 건드린다.** 확장의 안전 규칙 5번을 그대로 통과한다
+## — 효과가 정하는 것은 「맞으면 무엇이 일어나나」와 「내 몸에 무엇이 붙나」뿐이다.
+## 매혹만은 규칙 5 의 **정신**(명중 확률을 올리는 것은 폭을 넓히는 것과 같다)에 걸리는데,
+## 사용자가 직접 요구한 항목이라 기각하지 않고 **가격 대신 상한 네 겹**으로 통제한다.
+func effect_of(effect: String, damage: float, range_pt: float,
+		cooldown: float) -> Dictionary:
+	if not EFFECTS.has(effect):
+		effect = EFFECT_NONE
+
+	var out := {
+		"effect": effect,
+		"is_self": false,
+		"damage_mult": 1.0,
+		"knockback": 0.0,
+		"knock_time": 0.0,
+		"charm_time": 0.0,
+		"charm_immune": 0.0,
+		"charm_break": 0.0,
+		"slow_mult": 1.0,
+		"slow_time": 0.0,
+		"lifesteal": 0.0,
+		"absorb": 0.0,
+		"duration": 0.0,
+		"reflect": false,
+	}
+	var cd: float = maxf(cooldown, 0.001)
+	match effect:
+		EFFECT_BLAST:
+			out["knockback"] = BLAST_KNOCKBACK
+			out["knock_time"] = BLAST_KNOCK_TIME
+		EFFECT_CHARM:
+			out["damage_mult"] = CHARM_DAMAGE_MULT
+			out["charm_time"] = CHARM_DURATION
+			out["charm_immune"] = CHARM_IMMUNE
+			out["charm_break"] = CHARM_BREAK_DAMAGE
+			out["slow_mult"] = CHARM_SLOW_MULT
+			out["slow_time"] = CHARM_SLOW_TIME
+		EFFECT_LIFESTEAL:
+			out["lifesteal"] = LIFESTEAL_RATIO
+		EFFECT_SHIELD:
+			out["is_self"] = true
+			out["absorb"] = damage_out(damage) * SHIELD_ABSORB_MULT
+			out["duration"] = self_effect_duration(range_pt, cd,
+					SHIELD_DUR_MIN, SHIELD_DUR_MAX, SHIELD_UPTIME_MAX)
+		EFFECT_REFLECT:
+			out["is_self"] = true
+			out["reflect"] = true
+			out["absorb"] = damage_out(damage) * REFLECT_ABSORB_MULT
+			out["duration"] = self_effect_duration(range_pt, cd,
+					REFLECT_DUR_MIN, REFLECT_DUR_MAX, REFLECT_UPTIME_MAX)
+	return out
+
+
+## 자기 효과(실드·반사)의 지속시간(초). **상한이 두 겹**이다.
+## 1) 범위 슬라이더가 정하는 절대값 `lerp(dur_min, dur_max, 범위/100)`
+## 2) **쿨타임 대비 상한** `쿨 × uptime_max` — 이게 없으면 싸고 넓은 조합이 상시가 된다
+##    ([실행] 데미지 1 · 범위 100 → 쿨 4.41초에 지속 8초 = 상시).
+## 두 겹을 다 걸면 **한 칸으로는 가동률이 실드 60% · 반사 30% 를 절대 못 넘는다**
+## (10,000 조합 전수 확인).
+func self_effect_duration(range_pt: float, cooldown: float,
+		dur_min: float, dur_max: float, uptime_max: float) -> float:
+	var rr: float = clampf(range_pt, 1.0, 100.0) / 100.0
+	return minf(lerpf(dur_min, dur_max, rr), maxf(cooldown, 0.001) * uptime_max)
 
 
 ## 【2026-08-01 신설】 차지율(0~1) → **데미지 배수.**
@@ -1262,8 +1630,18 @@ func full_hit_distance(pellet_radius: float, spread_deg: float,
 ## 원래부터 이 함수를 거치고 있었다. 대신 **바깥에서 또 곱하면 안 된다.**
 ## 탄 수로 나누는 것은 변환 **뒤**다: 합 = `damage_out(damage)` 가 정확히 유지된다
 ## (검산: 슬라이더 60 → 탄 1·3·5·7발 전부 총 24.0000).
-func damage_per_hit(damage: float, tag: String, pellets: int = 0) -> float:
+##
+## 【2026-08-02 확장 — 효과 옵션】 네 번째 인자 `effect` 가 생겼다.
+## 매혹만 데미지 출력이 `CHARM_DAMAGE_MULT`(0.5) 배가 되고 나머지는 1.0 이다.
+## **인자를 안 넘기면 종전과 완전히 같은 함수다** — 기존 호출부는 하나도 안 깨진다.
+## 🔴 배수를 **이 함수 안에서만** 곱하는 이유는 `DAMAGE_SCALE` 과 똑같다:
+##   변환 지점이 하나여야 「어디선가 또 곱해서 0.25배가 되는」 사고가 안 난다.
+##   `Player._shoot()` 과 제작창은 원래부터 이 함수를 거치므로 배선을 고칠 것이 없다.
+func damage_per_hit(damage: float, tag: String, pellets: int = 0,
+		effect: String = EFFECT_NONE) -> float:
 	var total: float = damage_out(damage)
+	if effect == EFFECT_CHARM:
+		total *= CHARM_DAMAGE_MULT
 	if pellets > 0:
 		return total / float(pellets)
 	match tag:
