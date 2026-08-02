@@ -27,6 +27,13 @@ var _player: Node
 var _slots: Array = []   # [{root, icon, veil, time, key, name}]
 ## 대쉬 칸. 그림이 없는 고정 기술이라 아이콘 대신 글자를 쓴다.
 var _dash: Dictionary = {}
+var _hp_label: Label
+var _hp_fill: ColorRect
+
+## 체력이 이 아래로 떨어지면 붉게 — 위험이 화면에 보여야 한다.
+const HP_OK := Color(0.42, 0.82, 0.48, 0.95)
+const HP_LOW := Color(0.92, 0.35, 0.32, 0.95)
+const HP_DANGER := 0.35
 
 
 func _ready() -> void:
@@ -67,7 +74,48 @@ func _build() -> void:
 	_dash = _build_slot(bar, "Shift")
 	(_dash["time"] as Label).add_theme_font_size_override("font_size", 20)
 
+	_build_health(bar.get_parent())
 	_refresh_all()
+
+
+## 체력 바 — 스킬바 바로 위. 2026-08-02 신설.
+## 그 전까지 플레이어는 맞지도 죽지도 않아서 HP 자체가 없었다.
+func _build_health(parent: Node) -> void:
+	var wrap := VBoxContainer.new()
+	wrap.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	wrap.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	wrap.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	wrap.offset_bottom = -(BOTTOM_MARGIN + SLOT_SIZE + 34.0)
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_theme_constant_override("separation", 3)
+	parent.add_child(wrap)
+
+	_hp_label = Label.new()
+	_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hp_label.add_theme_font_size_override("font_size", 15)
+	_hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_child(_hp_label)
+
+	var back := PanelContainer.new()
+	back.custom_minimum_size = Vector2(360, 18)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bs := StyleBoxFlat.new()
+	bs.bg_color = Color(0.08, 0.08, 0.11, 0.9)
+	bs.set_corner_radius_all(5)
+	bs.set_border_width_all(2)
+	bs.border_color = Color(1, 1, 1, 0.16)
+	back.add_theme_stylebox_override("panel", bs)
+	wrap.add_child(back)
+
+	var fill_wrap := Control.new()
+	fill_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	back.add_child(fill_wrap)
+
+	_hp_fill = ColorRect.new()
+	_hp_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hp_fill.color = HP_OK
+	_hp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fill_wrap.add_child(_hp_fill)
 
 
 func _build_slot(parent: Node, key: String) -> Dictionary:
@@ -180,6 +228,21 @@ func _process(_delta: float) -> void:
 		_update_slot(s)
 	if not _dash.is_empty():
 		_update_dash()
+	_update_health()
+
+
+func _update_health() -> void:
+	if _hp_fill == null or not ("hp" in _player):
+		return
+	var hp: float = _player.hp
+	var mx: float = _player.max_hp
+	var ratio: float = clampf(hp / maxf(mx, 0.001), 0.0, 1.0)
+	_hp_fill.anchor_right = ratio
+	_hp_fill.color = HP_LOW if ratio <= HP_DANGER else HP_OK
+	if _player.has_method("is_dead") and _player.is_dead():
+		_hp_label.text = "쓰러짐 — 곧 부활"
+	else:
+		_hp_label.text = "%d / %d" % [int(ceil(hp)), int(mx)]
 
 
 ## 대쉬 칸. 그림이 없으므로 준비됐을 때 「⚡」 를 띄운다.

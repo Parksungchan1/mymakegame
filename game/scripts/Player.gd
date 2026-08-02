@@ -129,17 +129,39 @@ var _dash_cool: float = 0.0
 const SCREEN_SHAKE := preload("res://scripts/ScreenShake.gd")
 var _shake: Node
 
+# ── 체력 / 죽음 ───────────────────────────────────────────────
+## 2026-08-02 신설. 그 전까지 **플레이어는 맞지도 죽지도 않았다**(QA 6차 1-A).
+## 기획서가 `DAMAGE_SCALE 0.40` 의 근거로 「HP 바가 100→60→20 으로 꺾인다」를 들었는데
+## 정작 HP 가 없었다. 이제 실재한다.
+signal health_changed(hp: float, max_hp: float)
+signal died
+
+@export var max_hp: float = 100.0
+## 죽고 다시 살아나기까지(초)
+@export var respawn_delay: float = 2.0
+## 부활 직후 잠깐 무적. 스폰 지점에 탄이 깔려 있으면 계속 죽는다.
+@export var spawn_grace: float = 1.2
+
+var hp: float = 100.0
+var _dead: bool = false
+var _grace: float = 0.0
+var _spawn_point_saved: Vector3 = Vector3.ZERO
+
 
 func _ready() -> void:
 	# 시점 조작이 없으니 마우스는 잡지 않는다. 스킬 제작창에서 그대로 쓴다.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_apply_camera_angle()
 	_attach_shake()
+	_attach_bots()
 	# 제작창에서 저장하면 곧바로 다음 발사에 반영된다.
 	SkillDB.slot_changed.connect(_on_slot_changed)
 	for slot in SLOT_ACTIONS:
 		_cooldowns[slot] = 0.0
 		_reload_slot(slot)
+	hp = max_hp
+	_spawn_point_saved = global_position
+	health_changed.emit(hp, max_hp)
 
 
 func _on_slot_changed(slot: String) -> void:
@@ -192,6 +214,23 @@ func _reload_slot(slot: String) -> void:
 	_prev_cooldown_total[slot] = new_cool
 
 
+## 봇을 아레나에 심는다.
+## `Arena.tscn` 은 아트 담당 파일이라 개발이 노드를 심지 않는다 — 코드로 붙인다.
+## 플레이어가 씬에 있을 때만 봇이 의미가 있으므로 여기서 부른다.
+func _attach_bots() -> void:
+	var world := get_parent()
+	if world == null or world.get_node_or_null("Bots") != null:
+		return
+	# `preload` 금지 — BotSpawner 가 Player.tscn 을 부르므로 순환이 된다.
+	var script: GDScript = load("res://scripts/BotSpawner.gd")
+	if script == null:
+		return
+	var spawner: Node = script.new()
+	spawner.name = "Bots"
+	# `_ready` 중에는 부모가 자식을 세우는 중이라 형제를 못 붙인다. 한 프레임 미룬다.
+	world.add_child.call_deferred(spawner)
+
+
 ## 카메라에 흔들림 노드를 매단다. 카메라 각도는 건드리지 않고 화면 오프셋만 흔든다.
 func _attach_shake() -> void:
 	var cam := _arm.get_node_or_null("Camera3D") as Camera3D
@@ -236,9 +275,68 @@ func _apply_camera_angle() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _grace > 0.0:
+		_grace = maxf(_grace - delta, 0.0)
+	if _dead:
+		# 죽어 있는 동안엔 조작도 발사도 안 된다. 중력만 받는다.
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		velocity.x = 0.0
+		velocity.z = 0.0
+		move_and_slide()
+		return
 	_move(delta)
 	_tick_skill(delta)
 	_animate(delta)
+
+
+# ── 피격 / 죽음 ───────────────────────────────────────────────
+## 투사체가 부르는 창구. `Dummy.take_damage` 와 **같은 계약**이다 —
+## false 를 돌려주면 "안 맞았다" 는 뜻이고 투사체가 그냥 지나간다.
+func take_damage(amount: float) -> bool:
+	if _dead or _grace > 0.0:
+		return false
+	hp = maxf(hp - amount, 0.0)
+	health_changed.emit(hp, max_hp)
+	if hp <= 0.0:
+		_die()
+	else:
+		# 맞은 걸 화면으로 알린다. 소리와 흔들림이 없으면 맞았는지도 모른다.
+		shake_hit()
+		Sfx.play("hit", 1.15, -3.0)
+	return true
+
+
+func is_dead() -> bool:
+	return _dead
+
+
+func _die() -> void:
+	_dead = true
+	died.emit()
+	Sfx.play("kill", 0.85, 0.0)
+	if _shake != null:
+		_shake.kill()
+	# 쓰러진다. 부활할 때 되돌린다.
+	_body.rotation.z = deg_to_rad(80.0)
+	await get_tree().create_timer(respawn_delay).timeout
+	_respawn()
+
+
+func _respawn() -> void:
+	_body.rotation.z = 0.0
+	_body.rotation.x = 0.0
+	global_position = _spawn_point_saved
+	velocity = Vector3.ZERO
+	hp = max_hp
+	_dead = false
+	_grace = spawn_grace
+	_flip_left = 0.0
+	_dash_left = 0.0
+	for slot in SLOT_ACTIONS:
+		_cooldowns[slot] = 0.0
+	_dash_cool = 0.0
+	health_changed.emit(hp, max_hp)
 
 
 # ── 애니메이션 ────────────────────────────────────────────────
@@ -613,6 +711,7 @@ func _spawn(slot: String, dir: Vector3, shape: Dictionary, dmg: float) -> void:
 		"damage": dmg,
 		"color": entry.get("color", Color.WHITE),
 		"mask": entry.get("mask", PackedByteArray()),
+		"shooter": self,
 	})
 	world.add_child(shot)
 	shot.global_position = _spawn_point(shape)

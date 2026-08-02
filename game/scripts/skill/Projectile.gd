@@ -22,7 +22,10 @@ signal hit(target: Node3D)
 ## 판정 레이어 — project.godot 의 [layer_names] 와 맞춘다.
 ## 1=world · 2=player · 3=enemy · 4=projectile
 const LAYER_PROJECTILE := 1 << 3
-const MASK_WORLD_AND_ENEMY := (1 << 0) | (1 << 2)
+## world + player + enemy. 2026-08-02 에 **player 를 추가**했다 —
+## 그 전에는 투사체가 사람을 그냥 통과했다(QA 6차 1-A). 봇이 생기면서 필수가 됐다.
+## 쏜 사람은 `shooter` 로 걸러낸다. 안 그러면 자기 발밑에서 자기가 맞는다.
+const MASK_WORLD_AND_ENEMY := (1 << 0) | (1 << 1) | (1 << 2)
 
 ## 맞은 자리에 남기는 잔상이 사라지기까지(초)
 const FLASH_TIME := 0.12
@@ -66,6 +69,8 @@ var color: Color = Color(1.0, 0.45, 0.15)
 var shape_spec: Dictionary = {"kind": "sphere", "radius": 0.5}
 ## 유저가 그린 32×32 마스크. 비어 있으면 밋밋한 구로 그린다.
 var mask: PackedByteArray = PackedByteArray()
+## 쏜 사람. 자기 탄에 자기가 맞으면 안 된다.
+var shooter: Node = null
 
 var _dir: Vector3 = Vector3.FORWARD
 var _travelled: float = 0.0
@@ -90,6 +95,7 @@ func configure(dir: Vector3, spec: Dictionary) -> void:
 	color = spec.get("color", color)
 	shape_spec = spec.get("shape", shape_spec)
 	mask = spec.get("mask", mask)
+	shooter = spec.get("shooter", null)
 
 
 func _ready() -> void:
@@ -316,6 +322,10 @@ func _animate(delta: float) -> void:
 
 func _on_body_entered(body: Node3D) -> void:
 	if _spent:
+		return
+
+	# 쏜 사람은 통과시킨다. 총구가 몸에 붙어 있어서 안 걸러내면 쏘자마자 자폭한다.
+	if shooter != null and body == shooter:
 		return
 
 	if body.has_method("take_damage"):
