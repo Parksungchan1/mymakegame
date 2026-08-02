@@ -1,16 +1,11 @@
-[gd_scene load_steps=39 format=3]
+[gd_scene load_steps=42 format=3]
 
 ; ── 캐릭터 아트 ───────────────────────────────────────────────
-; 기획서 10행 "캐릭터/속도는 멧챠 카멜레온풍" → 작고 날쌘 2등신 실루엣.
-; 머리를 크게, 몸통·팔다리를 짧게 잡아 위에서 비스듬히(pitch -32°) 내려다보는
-; 고정 카메라에서도 "사람"으로 읽히게 했다.
+; 기획서 10행 "캐릭터/속도는 멧챠 카멜레온풍" → 작고 날쌘 소형 마법사.
+; 위에서 비스듬히(pitch -32°) 내려다보는 고정 카메라에서도 "사람"으로 읽히게 잡았다.
 ;
-; 앞은 -Z 다(Player.gd `_face()` 주석 참고). 눈·마법봉은 전부 -Z 쪽,
-; 망토는 +Z(등) 쪽에 둔다. 위에서 봤을 때 어느 쪽을 보는지 바로 읽히라고 넣은 장치다.
-;
-; 색: 몸은 파랑(팀색 자리), 목도리만 노랑 포인트. 나머지는 채도를 낮게 눌렀다.
-; 스킬 투사체가 유저가 고른 아무 색으로나 날아오므로, 캐릭터가 색을 많이 먹으면
-; 이펙트가 안 읽힌다. 그래서 캐릭터는 색 두 개로 끝낸다.
+; 앞은 -Z 다(Player.gd `_face()` 주석 참고). 눈·마법봉은 -Z 쪽,
+; 망토는 +Z(등) 쪽. 위에서 봤을 때 어느 쪽을 보는지 바로 읽히라고 넣은 장치다.
 ;
 ; CollisionShape3D / CamPivot 구조는 코드가 의존하므로 건드리지 않는다.
 ;
@@ -18,9 +13,7 @@
 ; ══════════════════════════════════════════════════════════════
 ; 2026-08-01 개정 — 「관절 피벗」 골격. 애니메이션은 개발이 코드로 돌린다.
 ; ══════════════════════════════════════════════════════════════
-; 종전에는 메시가 전부 Body 밑에 평평하게 놓여 있었다. 그 상태로 다리를 돌리면
-; **엉덩이가 아니라 다리 한가운데를 축으로** 돌아서 다리가 몸에서 빠져나간다.
-; 그래서 움직여야 하는 관절마다 회전용 빈 Node3D(피벗)를 관절 위치에 두고
+; 움직여야 하는 관절마다 회전용 빈 Node3D(피벗)를 관절 위치에 두고
 ; 그 밑에 메시를 매달았다. 개발은 **피벗의 rotation 만** 만지면 된다.
 ;
 ;   Body/Neck        (0, 1.14, 0)      머리·모자·눈 전체
@@ -34,27 +27,68 @@
 ; ★ `Body/Wand` 를 오른쪽 어깨 피벗으로 **겸용**한 이유:
 ;   Player.gd 가 `$Body/Wand/Muzzle` 을 참조한다. 어깨 피벗을 따로 끼워 넣으면
 ;   그 경로가 깨진다. 그래서 Wand 노드 자체를 어깨 관절로 옮기고 마법봉 부품을
-;   그 밑에 넣었다. **경로 `$Body/Wand/Muzzle` 은 그대로고, Muzzle 의 최종 위치도
-;   한 자리도 안 바뀐다**(Body 기준 0.2652, 0.7492, -0.8974 — 아래 Muzzle 의 ⚠ 참고).
-;   덕분에 `$Body/Wand.rotation.x` 한 줄로 **팔+손+마법봉이 통째로** 올라간다 —
-;   사용자가 요구한 "팔을 위로 올렸다가 내리는 모션"이 이 한 값으로 나온다.
+;   그 밑에 넣었다. **경로도 Muzzle 의 최종 위치도 한 자리도 안 바뀐다.**
 ;
 ; 회전 부호 규칙(전 관절 공통):
 ;   rotation.x 양수 → 그 관절에 매달린 것이 **앞(-Z)쪽으로** 돈다.
-;                     (다리는 앞으로 차고, 팔은 앞→위로 올라간다)
 ;   rotation.z 양수 → **+X(캐릭터 오른쪽)** 으로 벌어진다.
 ;   rotation.y 양수 → 위에서 봤을 때 반시계.
 ; 모든 피벗은 basis 가 단위행렬이다. 각도를 섞어 계산할 필요가 없다.
 ;
-; ── 발 박힘 수정 ──────────────────────────────────────────────
-; 사용자 보고: "발이 배경에 들어가 있어". 실제 원인은 캐릭터가 아니라 **러그**였다.
-; CollisionShape3D(캡슐 r0.35 h1.7 @y0.85) 의 바닥은 y=0 이라 캐릭터는 y=0 에 선다.
-; 그런데 Arena 의 러그는 판정이 없는 장식인데 윗면이 y=0.12 / 0.19 였다.
-; 신발 밑창이 y=0.005 였으니 **발이 통째로 러그 밑에 잠긴다.** 렌더로 확인했다 —
-; 스폰 지점(0, 12)에서 신발이 화면에 아예 안 보이고 종아리가 러그 면에서 잘렸다.
-; 조치: (1) 러그 윗면을 0.004 / 0.008 로 낮춘다(Arena.tscn),
-;       (2) 신발 밑창을 0.005 → **0.015** 로 올려 7~11mm 여유를 남긴다.
-; CollisionShape3D 는 손대지 않았다 — 점프 높이 1.2m 기준으로 아레나 가구가 짜여 있다.
+; ⚠ **.tscn 의 Transform3D 12개 숫자는 basis 를 「행(row)」 순서로 적는다.**
+;    Transform3D(a0..a8, ox,oy,oz) 에서 실제 축(열벡터)은
+;    X축=(a0,a3,a6) · Y축=(a1,a4,a7) · Z축=(a2,a5,a8) 이다.
+;    (a0,a1,a2) 를 X축으로 읽으면 전치 행렬이 되어 회전이 조용히 반대로 간다.
+;
+;
+; ══════════════════════════════════════════════════════════════
+; 2026-08-02 개정 ② — 「캐릭터가 별로다 / 좀 더 커야 한다」 재디자인
+; ══════════════════════════════════════════════════════════════
+; 실제 게임 화면(1600×900, cam 7m)을 렌더해서 캐릭터를 5배 확대해 진단했다.
+; 사용자가 「별로」라고 한 것의 정체는 다섯 가지였다:
+;
+;  1. **모자가 마법사 모자가 아니라 경찰모/철모로 읽혔다.**
+;     고깔 높이 0.32 vs 챙 지름 0.53 → 챙이 이겼다. 위에서 보면 챙이 전부다.
+;  2. **눈이 화면에 단 한 픽셀도 안 나왔다.** 눈은 얼굴 앞(-Z)에 붙어 있는데
+;     이 게임은 캐릭터가 대부분 **등을 보이고** 서 있다. 게다가 모자 챙이 위를 덮는다.
+;     → 눈을 **머리 옆(±X)** 으로 옮겼다. 카멜레온이 원래 그렇게 생겼고,
+;       옆에 달면 **뒤에서 봐도** 머리 실루엣 밖으로 두 개의 혹이 튀어나온다.
+;  3. **마법봉이 안 보였다.** 게임의 정체성("마법봉으로 마법 쓰는 연출")인데
+;     막대가 진한 갈색(0.30,0.22,0.16)이라 어두운 마루 위에서 통째로 사라졌다.
+;     → **상아색**으로 바꾸고 굵기 0.048→0.072, 끝 구슬 0.09→0.125, 바깥으로 5cm.
+;     끝 구슬 emission 은 3.2 → **1.8** 로 내렸다. 3.2 는 표면이 통째로 흰색으로 타서
+;     「호박색 보석」이 아니라 「흰 마시멜로」로 읽혔다(렌더 확인). 1.8 이면 호박색이
+;     남으면서 글로우 문턱(1.3)은 그대로 넘는다.
+;     ⚠ 개발: 차징 램프 목표치(리포트의 9.0)도 같은 비율로 **5.0** 으로 내려라.
+;  4. **색이 파랑 한 가지였다.** robe·cap·cape·pants 가 전부 파랑 계열이고
+;     유일한 악센트인 목도리는 화면에서 **세로 3픽셀**이었다. 팀 구분색으로 못 쓴다.
+;     → 명도 구조를 만들었다: 위(모자·망토)는 **거의 검정에 가까운 남색** =
+;       실루엣 앵커, 가운데(로브)는 **채도 올린 파랑** = 팀색 자리,
+;       악센트(금색)는 **목도리를 러프(ruff)로 키우고 모자띠·부츠단** 3군데로 늘렸다.
+;  5. **위에서 볼 때 앞뒤 구분이 약했다.** 망토깃이 몸통과 같은 파랑이라 안 갈렸다.
+;     → 망토를 어깨보다 넓은 **검은 판**으로 키우고 뒤로 **뾰족한 꼬리**를 달았다.
+;       -32° 부감에서 이 꼬리가 그대로 「등은 이쪽」 화살표가 된다.
+;
+; ── 크기: **CollisionShape3D 는 한 자리도 안 건드렸다** ──────────
+; 캡슐(r0.35 h1.7)을 키우면 점프 높이 1.2m 기준으로 짜인 아레나 가구
+; (책 계단 1.1m×3 · 방석 1.1m · 매트리스 3.8m)가 통째로 흔들린다.
+; 그래서 **판정은 그대로 두고 겉보기만 키웠다**:
+;   · 발바닥은 y=0.015 그대로, 머리 꼭대기도 캡슐 상단(1.70) 안쪽(1.667)에 들어간다.
+;   · 커진 건 **모자**뿐이다 — 꼭짓점 y=1.78 → **2.13**(+0.35m).
+;     모자는 판정이 없으므로 캡슐 밖으로 나가도 게임에 아무 영향이 없다.
+;     이 방에서 가장 낮은 머리 위 장애물은 책상 상판 밑면 **7m** 라 걸릴 데가 없다.
+;   · 가로도 키웠다: 머리 0.47→0.60(눈까지 **0.84**) · 어깨망토 0.50→0.70.
+;     캡슐 지름 0.70 을 살짝 넘지만 **가로 초과분은 모자·눈·망토뿐**이라
+;     벽에 붙어 서면 모자챙이 벽에 살짝 겹친다. 판정을 키우는 것보다 이쪽이 싸다.
+;
+; 📏 **실측(1600×900, 같은 스폰 지점에서 모자 꼭짓점~발바닥 픽셀을 직접 셈):**
+;     구캐릭터 @cam 7.0 : **131px** (화면 세로의 14.6%)
+;     신캐릭터 @cam 7.0 : **158px** (17.6%)  ← 아트만으로 **+21%**
+;     신캐릭터 @cam 6.0 : **182px** (20.2%)  ← 카메라까지 합쳐 **+39%** (면적 약 1.9배)
+;   카메라 값은 `Arena.tscn` 의 Player 인스턴스에 임시로 얹혀 있다. 거기 주석 참고.
+;
+; ⚠ 개발: 봇 머리 위 `HpLabel` 이 y=2.3 인데 모자 꼭짓점이 2.13 이다. 여유가 17cm 뿐이니
+;    **2.55 로 올려 달라**(BotSpawner.gd `_add_health_label`).
 
 [ext_resource type="Script" path="res://scripts/Player.gd" id="1_player"]
 
@@ -62,54 +96,77 @@
 radius = 0.35
 height = 1.7
 
-; ── 재질 ──
-[sub_resource type="StandardMaterial3D" id="mat_skin"]
-albedo_color = Color(0.87, 0.73, 0.6, 1)
-roughness = 0.75
+; ── 재질 ──────────────────────────────────────────────────────
+; 색 규칙(2026-08-02 개정): **hue 는 두 개, 명도는 네 단계.**
+; 스킬 투사체 색은 유저가 아무 색이나 고르므로 캐릭터가 hue 를 많이 먹으면
+; 이펙트가 안 읽힌다. 그래서 색상 수는 늘리지 않고 **명도 대비만** 벌렸다.
+;   가장 어두움(0.10) = 모자·망토  → 실루엣 앵커. 어떤 배경에서도 형태가 남는다
+;   중간       (0.45) = 로브       → **팀 구분색 자리**(가장 넓은 면)
+;   밝음       (0.90) = 피부·마법봉 → 얼굴과 손이 초점이 된다
+;   악센트     (금색)  = 러프·모자띠·부츠단 → 세 군데. 시선을 위→아래로 잇는다
+; 종전에는 이 네 단계가 전부 「중간 파랑」 하나로 뭉개져 있었다.
 
-[sub_resource type="StandardMaterial3D" id="mat_robe"]
-albedo_color = Color(0.24, 0.53, 0.82, 1)
+[sub_resource type="StandardMaterial3D" id="mat_skin"]
+albedo_color = Color(0.86, 0.69, 0.53, 1)
 roughness = 0.7
 
+; 로브 = 가장 넓은 면 = **팀 구분색 자리**. 종전(0.24,0.53,0.82)보다 채도를 올렸다.
+; 위아래를 거의 검정으로 눌렀기 때문에 여기만 채도를 올려도 색이 안 싸운다.
+[sub_resource type="StandardMaterial3D" id="mat_robe"]
+albedo_color = Color(0.16, 0.45, 0.88, 1)
+roughness = 0.65
+
+; 모자 — 거의 검정에 가까운 남색. 화면 맨 위에 오는 **가장 어두운 덩어리**다.
+; 밝은 벽 앞이든 어두운 마루 위든 이 검은 삼각형은 언제나 형태로 남는다.
 [sub_resource type="StandardMaterial3D" id="mat_cap"]
-albedo_color = Color(0.15, 0.33, 0.56, 1)
+albedo_color = Color(0.09, 0.13, 0.3, 1)
 roughness = 0.7
 
 [sub_resource type="StandardMaterial3D" id="mat_cape"]
-albedo_color = Color(0.15, 0.32, 0.54, 1)
+albedo_color = Color(0.11, 0.16, 0.34, 1)
 roughness = 0.75
 
 [sub_resource type="StandardMaterial3D" id="mat_pants"]
-albedo_color = Color(0.23, 0.25, 0.33, 1)
+albedo_color = Color(0.22, 0.25, 0.36, 1)
 roughness = 0.8
 
 [sub_resource type="StandardMaterial3D" id="mat_shoe"]
-albedo_color = Color(0.14, 0.14, 0.18, 1)
+albedo_color = Color(0.1, 0.1, 0.13, 1)
 roughness = 0.85
 
-; 위에서 내려다보는 화면이라 목도리 색이 가장 크게 보인다. 아군/적 구분점 후보.
+; 악센트(금색) — 러프 목도리 · 모자띠 · 부츠단 **세 군데**에 쓴다.
+; 종전에는 목도리 한 군데였고 화면에서 세로 3픽셀이라 사실상 없는 색이었다.
+; 세 군데로 나눈 이유: 한 군데를 크게 키웠더니 **노란 도넛**이 됐다(렌더 확인).
+; 같은 총량을 위(모자띠) → 가운데(러프) → 아래(부츠단)로 흩으면
+; **시선이 캐릭터를 세로로 훑어서** 키가 더 커 보인다.
+; ⚠ **팀 구분은 이제 목도리가 아니라 로브(mat_robe)** 가 맡는다. 금색은 양 팀 공통 트림이다.
+;   근거는 reports/designer.md 「봇 외형」 절 — 넓은 면이 아니면 5:5 에서 안 읽힌다.
+;   (2026-07-31 리포트의 「목도리 = 팀 구분색 자리」는 이걸로 정정한다)
 [sub_resource type="StandardMaterial3D" id="mat_accent"]
-albedo_color = Color(0.93, 0.79, 0.33, 1)
-roughness = 0.6
+albedo_color = Color(0.99, 0.8, 0.2, 1)
+roughness = 0.55
 
 [sub_resource type="StandardMaterial3D" id="mat_eye"]
-albedo_color = Color(0.96, 0.96, 0.98, 1)
+albedo_color = Color(0.97, 0.97, 0.99, 1)
 roughness = 0.15
 
 [sub_resource type="StandardMaterial3D" id="mat_pupil"]
-albedo_color = Color(0.09, 0.09, 0.13, 1)
+albedo_color = Color(0.07, 0.07, 0.11, 1)
 roughness = 0.2
 
+; 마법봉 막대 — 종전 진한 갈색(0.3,0.22,0.16)에서 **상아색**으로 바꿨다.
+; 렌더 확인: 갈색 막대는 어두운 마루(0.44,0.38,0.31) 위에서 통째로 사라졌다.
+; 이 게임의 정체성이 「마법봉으로 마법 쓰는 연출」인데 마법봉이 안 보이면 안 된다.
 [sub_resource type="StandardMaterial3D" id="mat_wand"]
-albedo_color = Color(0.3, 0.22, 0.16, 1)
-roughness = 0.6
+albedo_color = Color(0.88, 0.84, 0.72, 1)
+roughness = 0.5
 
 ; 마법봉 끝은 유일하게 빛나는 부분이다. 발사 지점이 어디인지 눈으로 알려주는 역할.
 [sub_resource type="StandardMaterial3D" id="mat_wand_tip"]
-albedo_color = Color(1, 0.72, 0.35, 1)
+albedo_color = Color(1, 0.7, 0.3, 1)
 emission_enabled = true
-emission = Color(1, 0.6, 0.25, 1)
-emission_energy_multiplier = 3.2
+emission = Color(1, 0.58, 0.2, 1)
+emission_energy_multiplier = 1.8
 
 ; ── 조준 표시 재질 ────────────────────────────────────────────
 ; unshaded 다. 그림자 속에 들어가도 밝기가 안 변해야 조준선이 안 사라진다.
@@ -117,7 +174,6 @@ emission_energy_multiplier = 3.2
 ;   · 스킬 투사체 색은 유저가 아무 색이나 고른다 → 특정 색상(hue)을 쓰면
 ;     그 색 스킬을 쓸 때 조준선과 투사체가 서로 잡아먹는다. 흰색은 상대 색이 없다.
 ;   · 바닥(0.44,0.38,0.31 따뜻한 나무)·러그(회색 0.42)와는 **명도**로 갈린다.
-;   · 살짝 푸른 기(0.78,0.88,1.0)를 넣어 따뜻한 바닥 위에서 "물체가 아니라 빛"으로 읽히게 했다.
 ; emission 을 안 쓴 이유: 글로우 문턱(1.3)을 넘기면 조준선이 번져서
 ; **마법 이펙트 전용으로 남겨둔 글로우**를 조준선이 나눠 갖는다.
 [sub_resource type="StandardMaterial3D" id="mat_aim_rail"]
@@ -130,86 +186,116 @@ transparency = 1
 shading_mode = 0
 albedo_color = Color(0.88, 0.94, 1, 0.5)
 
-; ── 메시 ──
+; ── 메시 ──────────────────────────────────────────────────────
 [sub_resource type="CapsuleMesh" id="mesh_torso"]
-radius = 0.2
+radius = 0.235
+height = 0.64
+
+; 머리 — 반지름 0.235 → 0.30. 화면에서 가장 크게 보이는 부위라 여기를 키우는 게
+; 「캐릭터가 커졌다」를 가장 싸게 만든다. 꼭대기(1.667)는 판정 캡슐(1.70) 안쪽이다.
+[sub_resource type="SphereMesh" id="mesh_head"]
+radius = 0.3
 height = 0.6
 
-[sub_resource type="SphereMesh" id="mesh_head"]
-radius = 0.235
-height = 0.47
-
+; 고깔 — 높이 0.32 → **0.60**, 밑지름 0.45 → **0.60**. **이제 챙보다 고깔이 크다.**
+; 종전에는 낮은 고깔 + 넓은 챙이라 위에서 보면 철모였다. 밑을 넓혀 두개골 윗부분도 덮는다.
 [sub_resource type="CylinderMesh" id="mesh_cap"]
-top_radius = 0.015
-bottom_radius = 0.225
-height = 0.32
+top_radius = 0.02
+bottom_radius = 0.3
+height = 0.6
 
+; 챙 — 지름 0.53 → 0.59. **머리(0.60)보다 좁다.** 이게 중요하다 —
+; 챙이 머리보다 넓으면 -32° 부감에서 옆에 달린 눈 포탑을 통째로 덮는다(렌더로 확인).
+; 「푹 눌러쓴」 느낌만 남기고 눈은 건드리지 않는 선이 여기다.
 [sub_resource type="CylinderMesh" id="mesh_brim"]
-top_radius = 0.265
-bottom_radius = 0.265
-height = 0.045
+top_radius = 0.275
+bottom_radius = 0.295
+height = 0.05
 
+; 모자띠 — 신설. 챙과 고깔 사이의 금색 링.
+[sub_resource type="CylinderMesh" id="mesh_hatband"]
+top_radius = 0.283
+bottom_radius = 0.283
+height = 0.042
+
+; 목도리 → **러프(ruff)**. 원기둥(지름 0.40, 높이 0.06) → 아래로 벌어지는
+; 원뿔(밑지름 **0.63**, 높이 0.09). 밑지름 0.63 > 망토 깊이(0.36) 라
+; **위에서 보면 머리 둘레로 금색 링이 삐져나온다.**
+; ⚠ 한 번 더 줄인 값이다 — 처음엔 밑지름 0.80 / 높이 0.16 으로 잡았더니
+;   렌더에서 **캐릭터가 노란 도넛을 두른 것처럼** 보이고 파란 로브(팀색)를 다 먹었다.
+;   악센트는 「눈에 띄는 선」이지 「면」이 아니다.
 [sub_resource type="CylinderMesh" id="mesh_collar"]
-top_radius = 0.2
-bottom_radius = 0.2
-height = 0.06
+top_radius = 0.245
+bottom_radius = 0.315
+height = 0.09
 
+; 어깨 망토 — 0.50×0.36 → **0.70×0.36.** 머리(0.60)보다 넓다.
+; -32° 부감에서 이 검은 사각형이 캐릭터의 「몸통」으로 읽힌다.
 [sub_resource type="BoxMesh" id="mesh_cape"]
-size = Vector3(0.5, 0.09, 0.36)
+size = Vector3(0.7, 0.1, 0.36)
+
+; 망토 꼬리 — 신설. 등에서 뒤아래로 40° 흘러내리는 삼각 자락.
+; 위에서 내려다보는 이 게임에서 **앞뒤를 알려주는 가장 싼 장치**다(폴리곤 6개).
+; ⚠ 처음엔 0.58×0.40 을 18° 로 눕혔더니 판의 뒷면이 카메라를 **정면으로 마주봐서**
+;   등 전체를 덮는 검은 V 가 됐고 팀색(파란 로브)이 사라졌다. 좁히고 세웠다.
+[sub_resource type="PrismMesh" id="mesh_tail"]
+size = Vector3(0.36, 0.26, 0.09)
 
 [sub_resource type="CapsuleMesh" id="mesh_arm"]
-radius = 0.06
-height = 0.38
+radius = 0.075
+height = 0.4
 
 [sub_resource type="SphereMesh" id="mesh_hand"]
-radius = 0.075
-height = 0.15
+radius = 0.095
+height = 0.19
 
 [sub_resource type="CapsuleMesh" id="mesh_leg"]
-radius = 0.085
+radius = 0.105
 height = 0.46
 
 [sub_resource type="BoxMesh" id="mesh_foot"]
-size = Vector3(0.16, 0.09, 0.28)
+size = Vector3(0.2, 0.1, 0.34)
 
+; 부츠단 — 신설. 발목의 금색 링.
+; 어두운 바지(0.17)와 더 어두운 신발(0.10)이 어두운 러그 위에서 붙어 보였다.
+; 그 사이에 밝은 선을 하나 넣으면 **걸을 때 다리가 움직이는 게 보인다.**
+[sub_resource type="CylinderMesh" id="mesh_cuff"]
+top_radius = 0.112
+bottom_radius = 0.124
+height = 0.045
+
+; 눈 — 반지름 0.085 → **0.145**, 그리고 얼굴 앞이 아니라 **머리 옆(±0.275)** 으로 옮겼다.
+; 카멜레온 눈이 원래 머리 옆에 포탑처럼 달려 있다(기획서 10행 "멧챠 카멜레온풍").
+; 실용적 이유가 더 크다 — 이 게임은 캐릭터가 **대부분 등을 보이고** 서 있어서
+; 앞에 붙은 눈은 화면에 단 한 픽셀도 안 나왔다(렌더로 확인). 옆에 달면
+; 머리 실루엣(폭 0.60) 밖으로 **0.12 씩** 튀어나와 **뒤에서도 두 개의 혹으로 읽힌다.**
 [sub_resource type="SphereMesh" id="mesh_eye"]
-radius = 0.085
-height = 0.17
+radius = 0.145
+height = 0.29
 
 [sub_resource type="SphereMesh" id="mesh_pupil"]
-radius = 0.042
-height = 0.084
+radius = 0.066
+height = 0.132
 
+; 마법봉 막대 — 0.048 각 → 0.072 각, 길이 0.5 → 0.54. 상아색이라 어두운 마루에서 뜬다.
 [sub_resource type="BoxMesh" id="mesh_wand"]
-size = Vector3(0.048, 0.048, 0.5)
+size = Vector3(0.072, 0.072, 0.54)
 
 [sub_resource type="SphereMesh" id="mesh_wand_tip"]
-radius = 0.09
-height = 0.18
+radius = 0.125
+height = 0.25
 
 ; 조준 레일 — 캐릭터 양옆으로 지나가는 두 줄. 가운데 한 줄로 안 그린 이유는
 ; 카메라가 -32° 고정이라 **북쪽(-Z)을 향하면 가운데 선이 캐릭터 몸에 통째로 가린다**.
-; 실제로 계산해 보면 캐릭터 실루엣은 화면 세로 -9.2°~+2.0° 를 먹고,
-; 바닥에 누운 2.9m 화살표의 끝은 +1.6° 라 몸 뒤로 완전히 들어간다.
 ; 그래서 (1) 몸통 좌우 바깥(±0.78m)에서 시작해 (2) 앞으로 7.5° 모이며
 ; (3) 촉이 머리 위로 넘어가는 4.5m 앞에 놓인다.
-;
-; **4.5m 은 두 제약을 저울질한 값이다**(계산 후 렌더로 확인):
-;   · 북(-Z) 을 보면 화살촉이 **모자 꼭대기(화면 +2.0°)보다 위**여야 안 가린다 → 3.7m 이상.
-;     3.7~4.0m 로 짧게 잡아 봤더니 촉이 모자에 붙어 **화살이 아니라 천막**으로 읽혔다.
-;   · 남(+Z, 카메라 쪽)을 보면 원근이 커져 화면 아래(-35°)로 넘어간다 → 3.7m 이하.
-;   두 조건이 정면충돌한다. **북쪽 가독성을 우선했다** — 남쪽을 볼 때는 캐릭터 얼굴과
-;   마법봉이 정면으로 보여 방향이 이미 자명하기 때문이다.
 ;   ⚠ 그 대가로 **정남향일 때 화살촉이 화면 아래(스킬바 뒤)로 빠진다.**
-;     신경 쓰이면 개발이 `$Body/AimArrow.scale.z` 를 Body 의 화면 깊이 방향 성분에 따라
-;     0.55~1.0 으로 줄이면 된다(= 카메라 쪽을 볼수록 짧게). 아트 쪽 준비는 끝났다.
+;     신경 쓰이면 개발이 `$Body/AimArrow.scale.z` 를 0.55~1.0 으로 줄이면 된다.
 [sub_resource type="BoxMesh" id="mesh_aim_rail"]
 size = Vector3(0.13, 0.02, 2.269)
 
 ; 화살촉 — 삼각기둥을 눕혔다. 꼭짓각 41° (폭 1.05 / 길이 1.4).
-; 처음엔 폭 1.72 / 길이 0.95 로 잡았는데 렌더해 보니 꼭짓각이 84° 라
-; **화살이 아니라 지붕(천막)** 으로 읽혔다. 레일 두 줄과 합쳐지면서 정자(亭子) 모양이 됐다.
-; 좁고 길게 고치고 레일도 안쪽으로 7° 모아서 「깔때기 → 촉」 으로 읽히게 했다.
+; 처음엔 폭 1.72 / 길이 0.95 로 잡았는데 꼭짓각이 84° 라 화살이 아니라 지붕으로 읽혔다.
 [sub_resource type="PrismMesh" id="mesh_aim_head"]
 size = Vector3(1.05, 1.4, 0.02)
 
@@ -219,15 +305,11 @@ size = Vector3(1.05, 1.4, 0.02)
 ;
 ; 🔑 목업을 실제로 렌더해서 얻은 결론 두 개(그대로 지킬 것):
 ;   1) **색은 「가산(add)」이 아니라 「혼합(mix)」에서만 살아남는다.**
-;      진한 청보라(0.28,0.2,0.95)를 가산으로 깔았더니 회색 러그 위에서 연보라로 떠서
-;      스킬 색이 안 읽혔다. 혼합으로 깐 잔상은 채도가 그대로 남았다.
 ;      → **유저가 그린 그림(=색의 주인)은 혼합. 플래시(=밝기 담당)만 가산.**
 ;   2) 가산 플래시의 한가운데는 어떤 색을 넣어도 흰색으로 탄다. 그러니 **일부러**
 ;      흰 코어를 따로 두되 **아주 짧게**(0.03초) 쓰고, 색 헤일로를 길게 남긴다.
 
 ; 부드러운 원형 감쇠. 플래시·후광·파티클이 전부 이 한 장을 쓴다.
-; 0.35 지점에서 알파를 0.55 로 꺾어서 「가운데가 단단하고 가장자리는 안개」가 되게 했다.
-; 선형 감쇠로 두면 원반 가장자리에 딱딱한 테두리가 생겨 「종이 원」으로 보인다.
 [sub_resource type="Gradient" id="grad_soft"]
 offsets = PackedFloat32Array(0, 0.35, 1)
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.55, 1, 1, 1, 0)
@@ -244,7 +326,6 @@ fill_to = Vector2(1, 0.5)
 size = Vector2(1, 1)
 
 ; 흰 코어 — 「터졌다」는 밝기만 담당한다. 색이 없다 = 어떤 스킬 색과도 안 싸운다.
-; 발사·명중 **처음 0.03초**에만 쓰고 바로 끈다. 오래 두면 스킬 색을 통째로 먹는다.
 [sub_resource type="StandardMaterial3D" id="mat_flash_core"]
 transparency = 1
 blend_mode = 1
@@ -257,8 +338,6 @@ albedo_texture = SubResource("tex_soft")
 render_priority = 1
 
 ; 색 헤일로 — 스킬 색으로 물들이는 자리(개발이 albedo_color 의 rgb 를 갈아끼운다).
-; 알파 0.55 는 렌더로 잡은 값이다. 0.85 로 두면 헤일로 자체가 흰색으로 타서
-; 「무슨 색 스킬인지」가 안 읽혔다.
 [sub_resource type="StandardMaterial3D" id="mat_flash_halo"]
 transparency = 1
 blend_mode = 1
@@ -270,7 +349,6 @@ albedo_color = Color(1, 1, 1, 0.55)
 albedo_texture = SubResource("tex_soft")
 
 ; 기 모으는 알갱이. CPUParticles3D 가 이 메시를 뿌린다.
-; vertex_color_use_as_albedo 를 켜 둬서 파티클의 `color` 만 바꾸면 스킬 색이 된다.
 [sub_resource type="StandardMaterial3D" id="mat_mote"]
 transparency = 1
 blend_mode = 1
@@ -290,28 +368,40 @@ collision_layer = 2
 collision_mask = 1
 script = ExtResource("1_player")
 
+; ⛔ 이 캡슐은 **아레나 가구 높이의 기준자**다. 절대 건드리지 말 것.
+;    점프 높이 1.2m · 책 계단 1.1m×3 · 방석 1.1m · 매트리스 3.8m 가 여기에 맞춰져 있다.
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
 shape = SubResource("col_body")
 
 [node name="Body" type="Node3D" parent="."]
 
-; 몸통 — 캡슐을 가로로 살짝 눌러 어깨가 넓고 배가 얇게. 앞뒤가 구분된다.
-; 몸통·망토깃·목도리는 피벗을 안 붙였다. 관절이 아니라 **몸통 그 자체**이고,
-; 목도리(Collar)는 Neck 이 돌 때 목 이음새를 가려주는 역할도 겸한다.
+; 몸통 — 캡슐을 가로로 눌러 어깨가 넓고 배가 얇게. 앞뒤가 구분된다.
+; 반지름 0.20 → 0.235, 높이 0.60 → 0.64. 위쪽 1.17 에서 러프가 이음새를 덮는다.
 [node name="Torso" type="MeshInstance3D" parent="Body"]
-transform = Transform3D(1.18, 0, 0, 0, 1, 0, 0, 0, 0.86, 0, 0.84, 0)
+transform = Transform3D(1.32, 0, 0, 0, 1, 0, 0, 0, 0.92, 0, 0.85, 0)
 mesh = SubResource("mesh_torso")
 surface_material_override/0 = SubResource("mat_robe")
 
-; 어깨에 얹힌 망토깃. 뒤로 치우쳐 있어서 위에서 봤을 때 등이 어디인지 알려준다.
+; 어깨 망토 — 어깨보다 넓은(0.74) 검은 판. 위에서 볼 때 이게 「몸통」으로 읽힌다.
+; 뒤(+Z)로 치우쳐 있어서 등이 어디인지 알려준다.
 [node name="Mantle" type="MeshInstance3D" parent="Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.105, 0.05)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0.07)
 mesh = SubResource("mesh_cape")
 surface_material_override/0 = SubResource("mat_cape")
 
+; 망토 꼬리 — 뒤로 18° 처지며 뾰족하게 빠진다(밑변 z=0.24 → 꼭짓점 z=0.62).
+; **-32° 부감에서 이게 그대로 「등은 이쪽」 화살표가 된다.**
+; basis: Y축(꼭짓점 방향) = (0, -0.309, 0.951) = 뒤+아래. 행 순서로 적었다.
+[node name="MantleTail" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, -0.643, -0.766, 0, 0.766, -0.643, 0, 0.996, 0.36)
+mesh = SubResource("mesh_tail")
+surface_material_override/0 = SubResource("mat_cape")
+
+; 러프(목도리) — Body 직계 자식이라 Neck 이 돌아도 목 이음새를 계속 덮는다.
+; 아래로 벌어지는 원뿔(밑지름 0.80)이라 **위에서 보면 머리 둘레로 금색 링**이 남는다.
 [node name="Collar" type="MeshInstance3D" parent="Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.19, 0)
 mesh = SubResource("mesh_collar")
 surface_material_override/0 = SubResource("mat_accent")
 
@@ -320,42 +410,54 @@ surface_material_override/0 = SubResource("mat_accent")
 [node name="Neck" type="Node3D" parent="Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.14, 0)
 
+; 머리 꼭대기 = 1.14 + 0.245 + 0.30×0.94 = **1.667** → 판정 캡슐 상단(1.70) 안쪽.
 [node name="Head" type="MeshInstance3D" parent="Body/Neck"]
-transform = Transform3D(1, 0, 0, 0, 0.96, 0, 0, 0, 1.04, 0, 0.21, 0)
+transform = Transform3D(1, 0, 0, 0, 0.94, 0, 0, 0, 1.06, 0, 0.245, 0)
 mesh = SubResource("mesh_head")
 surface_material_override/0 = SubResource("mat_skin")
 
-; 고깔모자 — 마법봉과 짝을 이루는 실루엣. 10° 기울여 앞뒤 방향감을 준다.
-; (실제로는 **뒤(+Z)로** 기운다. 종전 주석의 "앞으로"는 basis 를 열 기준으로
-;  잘못 읽은 것이다 — 위 Muzzle 의 ⚠ 참고. 보기에는 문제가 없어 각도는 그대로 뒀다.)
+; 모자 3단(챙 → 금색 띠 → 고깔). 셋 다 뒤(+Z)로 12° 기울여 앞뒤 방향감을 준다.
+; basis Y축 = (0, 0.9781, 0.2079) → 위쪽이 뒤로 넘어간다.
 [node name="CapBrim" type="MeshInstance3D" parent="Body/Neck"]
-transform = Transform3D(1, 0, 0, 0, 0.9848, -0.1736, 0, 0.1736, 0.9848, 0, 0.34, -0.03)
+transform = Transform3D(1, 0, 0, 0, 0.9781, -0.2079, 0, 0.2079, 0.9781, 0, 0.335, -0.015)
 mesh = SubResource("mesh_brim")
 surface_material_override/0 = SubResource("mat_cap")
 
+[node name="HatBand" type="MeshInstance3D" parent="Body/Neck"]
+transform = Transform3D(1, 0, 0, 0, 0.9781, -0.2079, 0, 0.2079, 0.9781, 0, 0.383, -0.025)
+mesh = SubResource("mesh_hatband")
+surface_material_override/0 = SubResource("mat_accent")
+
+; 고깔 꼭짓점 = Neck 기준 (0, 0.993, 0.095) → **월드 y 2.13.**
+; 판정 캡슐(1.70) 밖이지만 모자는 판정이 없다. 이 방에서 가장 낮은 머리 위 장애물은
+; 책상 상판 밑면 7m 라 걸릴 데가 없다. **겉보기 세로를 +20% 벌어 온 자리다.**
 [node name="CapCone" type="MeshInstance3D" parent="Body/Neck"]
-transform = Transform3D(1, 0, 0, 0, 0.9848, -0.1736, 0, 0.1736, 0.9848, 0, 0.48, -0.03)
+transform = Transform3D(1, 0, 0, 0, 0.9781, -0.2079, 0, 0.2079, 0.9781, 0, 0.7, 0.033)
 mesh = SubResource("mesh_cap")
 surface_material_override/0 = SubResource("mat_cap")
 
-; 눈은 카멜레온처럼 살짝 튀어나오게. 멀리서도 어디를 보는지 읽힌다.
+; 눈 — **머리 옆(±0.275)** 에 달린 카멜레온 포탑. 머리 폭(0.60) 밖으로 0.12 씩
+; 튀어나와 총 0.84. 등을 보이고 있어도 두 개의 흰 혹으로 읽힌다.
 [node name="EyeL" type="MeshInstance3D" parent="Body/Neck"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.105, 0.26, -0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.275, 0.185, -0.065)
 mesh = SubResource("mesh_eye")
 surface_material_override/0 = SubResource("mat_eye")
 
 [node name="EyeR" type="MeshInstance3D" parent="Body/Neck"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.105, 0.26, -0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.275, 0.185, -0.065)
 mesh = SubResource("mesh_eye")
 surface_material_override/0 = SubResource("mat_eye")
 
+; 눈동자는 포탑의 **바깥-앞** 면에 얹는다(정면에서 35° 바깥).
+; 정후방에서는 능선에 걸쳐 살짝만 보이고, 조금만 돌면 확 드러난다 →
+; 「나를 보고 있다」가 정보가 된다.
 [node name="PupilL" type="MeshInstance3D" parent="Body/Neck"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.105, 0.262, -0.272)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.375, 0.192, -0.14)
 mesh = SubResource("mesh_pupil")
 surface_material_override/0 = SubResource("mat_pupil")
 
 [node name="PupilR" type="MeshInstance3D" parent="Body/Neck"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.105, 0.262, -0.272)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.375, 0.192, -0.14)
 mesh = SubResource("mesh_pupil")
 surface_material_override/0 = SubResource("mat_pupil")
 
@@ -364,12 +466,12 @@ surface_material_override/0 = SubResource("mat_pupil")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.27, 1.06, 0)
 
 [node name="ArmL" type="MeshInstance3D" parent="Body/ShoulderL"]
-transform = Transform3D(1, 0, 0, 0, 0.951, -0.309, 0, 0.309, 0.951, 0.02, -0.16, 0.04)
+transform = Transform3D(1, 0, 0, 0, 0.951, -0.309, 0, 0.309, 0.951, -0.03, -0.17, 0.04)
 mesh = SubResource("mesh_arm")
 surface_material_override/0 = SubResource("mat_robe")
 
 [node name="HandL" type="MeshInstance3D" parent="Body/ShoulderL"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, -0.355, 0.105)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.03, -0.375, 0.11)
 mesh = SubResource("mesh_hand")
 surface_material_override/0 = SubResource("mat_skin")
 
@@ -385,10 +487,16 @@ surface_material_override/0 = SubResource("mat_pants")
 [node name="AnkleL" type="Node3D" parent="Body/HipL"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.46, 0)
 
+; 신발 밑창 y=0.015 는 그대로다(러그 윗면 0.008 위). 발 박힘 수정 때 잡은 값.
 [node name="FootL" type="MeshInstance3D" parent="Body/HipL/AnkleL"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, -0.06)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.005, -0.08)
 mesh = SubResource("mesh_foot")
 surface_material_override/0 = SubResource("mat_shoe")
+
+[node name="CuffL" type="MeshInstance3D" parent="Body/HipL/AnkleL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.055, 0)
+mesh = SubResource("mesh_cuff")
+surface_material_override/0 = SubResource("mat_accent")
 
 ; ── 오른다리 ──
 [node name="HipR" type="Node3D" parent="Body"]
@@ -403,9 +511,14 @@ surface_material_override/0 = SubResource("mat_pants")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.46, 0)
 
 [node name="FootR" type="MeshInstance3D" parent="Body/HipR/AnkleR"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, -0.06)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.005, -0.08)
 mesh = SubResource("mesh_foot")
 surface_material_override/0 = SubResource("mat_shoe")
+
+[node name="CuffR" type="MeshInstance3D" parent="Body/HipR/AnkleR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.055, 0)
+mesh = SubResource("mesh_cuff")
+surface_material_override/0 = SubResource("mat_accent")
 
 ; ── 오른쪽 어깨 = 마법봉 루트 ─────────────────────────────────
 ; 기획서 12행 "마법봉으로 마법 쓰는 연출".
@@ -417,7 +530,7 @@ surface_material_override/0 = SubResource("mat_shoe")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.27, 1.06, 0)
 
 [node name="ArmR" type="MeshInstance3D" parent="Body/Wand"]
-transform = Transform3D(0.978, 0, 0.208, 0.2072, 0.0872, -0.9743, -0.0181, 0.9962, 0.0853, 0.06, -0.025, -0.15)
+transform = Transform3D(0.978, 0, 0.208, 0.2072, 0.0872, -0.9743, -0.0181, 0.9962, 0.0853, 0.075, -0.03, -0.16)
 mesh = SubResource("mesh_arm")
 surface_material_override/0 = SubResource("mat_robe")
 
@@ -427,57 +540,42 @@ mesh = SubResource("mesh_hand")
 surface_material_override/0 = SubResource("mat_skin")
 
 ; 마법봉 막대기 자체. 손목 스냅을 따로 주고 싶으면 이 노드를 돌린다.
-; 위로 32° + 바깥으로 12° 젖힌 각도는 그대로다 — 카메라가 -32° 로 내려다보므로
-; 이만큼 젖혀야 화면에서 "앞으로 겨눈" 걸로 읽힌다(안 젖히면 땅을 가리키는 것처럼 보인다).
+; ⚠ **이 basis 는 절대 건드리지 마라.** Muzzle 이 Rod 로컬 (0,0,-0.6) 자리에
+;    수동으로 박혀 있어서, Rod 를 돌리면 총구 섬광이 마법봉에서 떨어져 나간다.
 [node name="Rod" type="Node3D" parent="Body/Wand"]
 transform = Transform3D(0.978, 0, 0.208, -0.11, 0.848, 0.518, -0.176, -0.53, 0.829, 0.12, 0, -0.4)
 
 [node name="Stick" type="MeshInstance3D" parent="Body/Wand/Rod"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.18)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.018, 0, -0.16)
 mesh = SubResource("mesh_wand")
 surface_material_override/0 = SubResource("mat_wand")
 
 [node name="Tip" type="MeshInstance3D" parent="Body/Wand/Rod"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.46)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.05, 0, -0.46)
 mesh = SubResource("mesh_wand_tip")
 surface_material_override/0 = SubResource("mat_wand_tip")
 
 ; 차징 등 — 「모으고 있다」를 방 전체에 알린다.
 ; 시전 진행률 t 에 대해 energy = 2.5·t² 로 올리면 **끝에서 확 밝아진다**(= 예고).
-; 선형으로 올리면 언제 터질지 정보가 안 실린다. energy 0 = 잠든 상태.
-; ⚠ `mat_wand_tip` 은 이 노드만 쓰는 독립 재질이다 — 개발이 `_reload_slot()` 에서
-;    `albedo_color`/`emission` 을 슬롯 색으로 갈아끼워도 다른 데 안 번진다.
+; ⚠ `mat_wand_tip` 은 이 노드만 쓰는 독립 재질이다 — 개발이 슬롯 색으로 갈아끼워도
+;    다른 데 안 번진다.
 [node name="ChargeLight" type="OmniLight3D" parent="Body/Wand/Rod/Tip"]
 light_color = Color(1, 0.72, 0.35, 1)
 light_energy = 0.0
 omni_range = 3.5
 
 ; Muzzle 은 Wand 의 **직계 자식**으로 남는다(경로 `$Body/Wand/Muzzle` 고정).
-; 위치는 개정 전과 완전히 동일하다 — Body 기준 **(0.2652, 0.7492, -0.8974)**.
-;   (Rod 의 basis × (0,0,-0.6) 을 손으로 푼 값. 아래 ⚠ 를 반드시 읽을 것)
+; 위치는 2026-08-01 이후 한 자리도 안 바뀌었다 — Body 기준 (0.2652, 0.7492, -0.8974).
+;   (Rod 의 basis × (0,0,-0.6) 을 손으로 푼 값)
 ; Player.gd 는 위치만 쓰고 방향은 Body 의 -Z 를 쓰므로 팔을 들어도 조준은 안 틀어진다.
-;
-; ⚠ **.tscn 의 Transform3D 12개 숫자는 basis 를 「행(row)」 순서로 적는다.**
-;    즉 Transform3D(a0..a8, ox,oy,oz) 에서 실제 축(열벡터)은
-;    X축=(a0,a3,a6) · Y축=(a1,a4,a7) · Z축=(a2,a5,a8) 이다.
-;    (a0,a1,a2) 를 X축으로 읽으면 **전치된 행렬**이 되어 회전이 반대로 간다.
-;    2026-08-01 이걸 렌더로 실측 확인했다 — 종전 리포트가 적어 둔
-;    「Muzzle ≈ (0.50, 1.38, -0.90)」과 「마법봉이 위로 32°」는 열 기준으로 읽은
-;    **오독**이다. 실제 마법봉은 앞아래 27° 를 향하고 봉 끝은 허리 높이(y≈0.82)다.
-;    화면에서 머리 옆으로 보이는 것은 봉 끝이 0.78m 앞에 있어서 생기는 착시다.
 [node name="Muzzle" type="Marker3D" parent="Body/Wand"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0048, -0.3108, -0.8974)
 
 ; ── 총구 섬광 ──────────────────────────────────────────────────
 ; `visible = false` 로 잠들어 있다. 발사 프레임에 개발이 켜고 0.11초 뒤 끈다.
 ; Muzzle 의 자식이라 팔이 내리쳐진 자세 그대로, 마법봉 끝에서 터진다.
-;
-; 크기 근거(렌더 확인): 헤일로 quad 1.7m → 그라디언트 때문에 **눈에 보이는 지름은
-; 약 0.85m** = 캐릭터 키(1.7m)의 절반. 7m 거리·FOV 70° 화면에서 확실히 읽히면서
-; 캐릭터 얼굴은 안 가리는 크기다. 1.5m 로 줄였더니 손에 묻혀 안 보였다.
-;
 ; 개발이 만질 것: `visible` · `scale` · 두 재질의 `albedo_color`
-;   (Halo 의 rgb 만 스킬 색으로. Core 는 **흰색 그대로 둔다** — 위 ⚠ 참고)
+;   (Halo 의 rgb 만 스킬 색으로. Core 는 **흰색 그대로 둔다**)
 [node name="Flash" type="Node3D" parent="Body/Wand/Muzzle"]
 visible = false
 
@@ -491,24 +589,16 @@ transform = Transform3D(0.62, 0, 0, 0, 0.62, 0, 0, 0, 1, 0, 0, 0)
 mesh = SubResource("mesh_fx_quad")
 surface_material_override/0 = SubResource("mat_flash_core")
 
-; 발사 순간 **방이 반응하게** 만드는 등. 이 목록에서 가성비가 제일 좋다 —
-; 폴리곤 0개로 바닥·가구·러그가 전부 스킬 색으로 물든다. 고정 카메라라 바닥이 늘 보인다.
-; energy 0 으로 잠들어 있다. 개발이 **2.4 → 0 을 0.10초** `ease_out` 으로 감쇠시킨다.
-;
-; ⚠ **범위 5.0 / 세기 4.0 은 과했다(렌더 실측).** 반경 5m 짜리 따뜻한 웅덩이가 생겨
-;   화면을 먹고, 무엇보다 **자기가 만든 빛이 자기 섬광(Flash quad)을 덮어서** 섬광이
-;   흰 점으로 쪼그라들었다. 그래서 4.0m / 2.4 로 내렸다.
-;   순서를 기억할 것 — **읽히는 건 quad 고, 등은 「방이 반응한다」만 담당한다.**
+; 발사 순간 **방이 반응하게** 만드는 등. 폴리곤 0개로 바닥·가구가 스킬 색으로 물든다.
+; ⚠ 범위 5.0 / 세기 4.0 은 과했다(렌더 실측) — 자기 빛이 자기 섬광을 덮었다. 4.0 / 2.4.
 [node name="FireLight" type="OmniLight3D" parent="Body/Wand/Muzzle"]
 light_color = Color(1, 0.72, 0.35, 1)
 light_energy = 0.0
 omni_range = 4.0
 
 ; 「기 모으기」 — 시전(차징) 동안 사방 0.75m 에서 마법봉 끝으로 **빨려 들어오는** 알갱이.
-; radial_accel 이 음수라서 원점(= 총구)으로 가속한다. 0.75m 를 정확히 0.5초에 훑는다
-; (s = ½·6.0·0.5² = 0.75). 발동 시간에 맞추려면 `lifetime` 만 바꾸고
-; `radial_accel_*` 를 `-2·0.75/lifetime²` 로 같이 맞춰야 도착 시점이 안 어긋난다.
-; `emitting` 은 false. 시전 시작에 켜고 발사 순간에 끈다.
+; radial_accel 이 음수라 원점(= 총구)으로 가속한다. 0.75m 를 정확히 0.5초에 훑는다.
+; 발동 시간에 맞추려면 `lifetime` 과 함께 `radial_accel_*` 도 `-2·0.75/lifetime²` 로.
 [node name="ChargeMotes" type="CPUParticles3D" parent="Body/Wand/Muzzle"]
 emitting = false
 amount = 14
@@ -525,18 +615,14 @@ radial_accel_min = -6.0
 radial_accel_max = -6.0
 
 ; ── 조준 방향 표시 ────────────────────────────────────────────
-; 사용자 요구: "스킬이 날아가는 방향을 화살표나 이런 걸로 보이게".
 ; Body 밑에 달았다 → `_face()` 가 Body 를 돌리면 화살표가 **저절로** 따라 돈다.
 ; 즉 이건 언제나 `Player.aim_direction()` 과 정확히 같은 방향을 가리킨다.
-; 개발이 코드로 할 것: 켜고 끄기(`$Body/AimArrow.visible`), 시전 중 색·굵기 강조,
-; 덤블링 중 끄기(_tick_flip 이 Body.rotation.x 를 돌리면 화살표도 같이 돈다).
 ; 높이 0.03 — 러그 윗면(0.008)보다 위, 신발 밑창(0.015)보다 위라 어디서도 안 잠긴다.
 [node name="AimArrow" type="Node3D" parent="Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
 
 ; 레일 두 줄 — 뒤(±0.78 @ z-0.35)에서 앞(±0.484 @ z-2.60)으로 7.5° 씩 모인다.
-; 캐릭터를 감싸는 「깔때기」다. 화살촉(밑변 z-3.1)과는 **0.5m 를 일부러 띄웠다** —
-; 붙여 놓으면 레일 바깥선과 촉 빗변이 한 줄로 이어져 화살이 아니라 **천막 실루엣**이 된다.
+; 화살촉(밑변 z-3.1)과는 **0.5m 를 일부러 띄웠다** — 붙이면 천막 실루엣이 된다.
 [node name="RailL" type="MeshInstance3D" parent="Body/AimArrow"]
 transform = Transform3D(0.9915, 0, -0.1298, 0, 1, 0, 0.1298, 0, 0.9915, -0.632, 0, -1.475)
 mesh = SubResource("mesh_aim_rail")
@@ -547,24 +633,20 @@ transform = Transform3D(0.9915, 0, 0.1298, 0, 1, 0, -0.1298, 0, 0.9915, 0.632, 0
 mesh = SubResource("mesh_aim_rail")
 surface_material_override/0 = SubResource("mat_aim_rail")
 
-; 삼각기둥을 눕혀서 촉이 -Z(앞)를 향하게 했다.
-; 밑변 z=-3.1(레일 끝, 폭 ±0.525) → 꼭짓점 z=-4.5.
-; PrismMesh 는 국소 +Y 가 꼭짓점이다. row 기준으로 +Y→-Z 가 되려면 Y축 열이 (0,0,-1),
-; 즉 (a1,a4,a7) = (0,0,-1) 이어야 한다. 아래 값이 그것이다(처음엔 전치로 적어서
-; 촉이 카메라 쪽을 향했다 — 렌더로 잡았다).
+; PrismMesh 는 국소 +Y 가 꼭짓점이다. row 기준으로 +Y→-Z 가 되려면 Y열이 (0,0,-1).
 [node name="Point" type="MeshInstance3D" parent="Body/AimArrow"]
 transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -3.8)
 mesh = SubResource("mesh_aim_head")
 surface_material_override/0 = SubResource("mat_aim_head")
 
 ; 카메라는 고정각(사용자 확정). 아래 각도는 Player.gd 의 cam_yaw_deg /
-; cam_pitch_deg 값으로 _ready 에서 다시 세팅된다. 여기 값은 에디터 미리보기용.
+; cam_pitch_deg / cam_distance 값으로 _ready 에서 다시 세팅된다. 여기 값은 미리보기용.
 [node name="CamPivot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CamPivot"]
 transform = Transform3D(1, 0, 0, 0, 0.848, -0.53, 0, 0.53, 0.848, 0, 0, 0)
-spring_length = 7.0
+spring_length = 6.0
 margin = 0.3
 
 [node name="Camera3D" type="Camera3D" parent="CamPivot/SpringArm3D"]
