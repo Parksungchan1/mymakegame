@@ -14,9 +14,18 @@ extends Node3D
 const BOT_PATH := "res://scripts/Bot.gd"
 const PLAYER_SCENE_PATH := "res://scenes/Player.tscn"
 
-## 적 색 — 플레이어(파랑 계열)와 확실히 갈리는 붉은 계열.
-const ENEMY_TINT := Color(0.86, 0.32, 0.30)
-const ENEMY_ACCENT := Color(0.95, 0.62, 0.25)
+## 적 색 — 아트 실측으로 확정(2026-08-02).
+##
+## 🔑 처음엔 넓은 면을 **전부 같은 빨강 하나**로 칠했는데, 렌더로 보니
+## 봇이 **납작한 빨간 덩어리**가 됐다. 플레이어의 **명도 구조를 그대로 옮기고
+## 색상(hue)만 파랑 → 빨강**으로 바꿔야 사람으로 보인다.
+##
+## 트림이 금색이 아니라 **뼈색**인 이유: 빨강 위의 금색은 따뜻한 색끼리라 묻힌다.
+## 뼈색은 확 뜨고, **「금색=아군 / 흰색=적」이라는 두 번째 구분 신호**가 공짜로 생긴다.
+const ENEMY_ROBE := Color(0.88, 0.22, 0.20)     ## 로브·양팔 — 팀색 자리(가장 넓은 면)
+const ENEMY_DARK := Color(0.26, 0.06, 0.10)     ## 모자·망토·꼬리
+const ENEMY_PANTS := Color(0.31, 0.14, 0.16)    ## 바지
+const ENEMY_TRIM := Color(0.95, 0.93, 0.86)     ## 러프·모자띠·부츠단
 
 ## 어디에 몇 마리를 놓을까. 러그 바깥쪽으로 흩어 둔다.
 ## 처음엔 **한 마리**로 시작한다. 2마리가 동시에 쏘면 6.6초 만에 죽는다(실측).
@@ -58,7 +67,8 @@ func _add_health_label(bot: Node) -> void:
 	label.no_depth_test = true
 	label.font_size = 56
 	label.pixel_size = 0.0042
-	label.position = Vector3(0, 2.3, 0)
+	# 모자 꼭짓점이 2.13 으로 올라가서 2.3 이면 모자에 걸린다(아트 실측).
+	label.position = Vector3(0, 2.55, 0)
 	label.modulate = Color(1, 0.72, 0.68)
 	bot.add_child(label)
 
@@ -70,15 +80,20 @@ func _add_health_label(bot: Node) -> void:
 
 
 ## 옷 색만 바꿔 적으로 만든다. 실루엣은 같아야 「같은 규칙으로 노는 상대」로 읽힌다.
+##
+## ⛔ **얼굴·손·발·마법봉은 절대 칠하지 않는다** — 칠하면 사람이 아니라 색종이가 된다.
 func _tint(bot: Node) -> void:
 	var body := bot.get_node_or_null("Body")
 	if body == null:
 		return
-	# 옷·망토처럼 넓은 면만 물들인다. 피부·눈은 그대로 둬야 사람으로 보인다.
-	for path in ["Torso", "Mantle", "ShoulderL/ArmL", "Wand/ArmR",
-			"Neck/CapCone", "Neck/CapBrim", "HipL/LegL", "HipR/LegR"]:
-		_paint(body.get_node_or_null(path), ENEMY_TINT)
-	_paint(body.get_node_or_null("Collar"), ENEMY_ACCENT)
+	for p in ["Torso", "ShoulderL/ArmL", "Wand/ArmR"]:
+		_paint(body.get_node_or_null(p), ENEMY_ROBE)
+	for p in ["Mantle", "MantleTail", "Neck/CapCone", "Neck/CapBrim"]:
+		_paint(body.get_node_or_null(p), ENEMY_DARK)
+	for p in ["HipL/LegL", "HipR/LegR"]:
+		_paint(body.get_node_or_null(p), ENEMY_PANTS)
+	for p in ["Collar", "Neck/HatBand", "HipL/AnkleL/CuffL", "HipR/AnkleR/CuffR"]:
+		_paint(body.get_node_or_null(p), ENEMY_TRIM)
 
 
 func _paint(node: Node, col: Color) -> void:
