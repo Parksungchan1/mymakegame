@@ -61,6 +61,26 @@ var _cast_left: float = 0.0
 ## 옆으로 도는 방향(1 또는 -1). 가끔 바꿔서 예측이 안 되게 한다.
 var _strafe: float = 1.0
 var _strafe_wait: float = 0.0
+
+# ── 회피(대쉬) ────────────────────────────────────────────────
+## 기획 [E-1] 1순위 요청. 봇이 회피를 못 하면 **「회피를 뺏는」 효과(매혹)의 값이
+## 정의상 0 으로 측정된다** — 뺏을 게 없으니까. 매혹뿐 아니라 대기 중인 실측 대부분이 여기 걸린다.
+##
+## 플레이어와 **같은 수치**를 쓴다. 봇만 더 좋은 대쉬를 주면 밸런스를 봇으로 못 잰다.
+@export var dash_speed: float = 22.2
+@export var dash_time: float = 0.18
+@export var dash_cooldown: float = 3.0
+## 이 거리 안에 들어온 탄만 피하려 든다. 너무 멀면 아직 피할 때가 아니다.
+@export var dodge_radius: float = 7.0
+## 탄이 이만큼 정면으로 오고 있어야 피한다(내적). 1.0 = 정확히 나를 향함.
+@export var dodge_threshold: float = 0.80
+## 사람처럼 늦게 반응한다. 0 이면 절대 안 맞는 봇이 된다.
+@export var dodge_reaction: float = 0.16
+
+var _dash_left: float = 0.0
+var _dash_dir: Vector3 = Vector3.ZERO
+var _dash_cool: float = 0.0
+var _dodge_delay: float = 0.0
 ## 부활 지점. 함수 `_spawn()` 과 이름이 겹치면 안 된다.
 var _home: Vector3
 
@@ -147,8 +167,99 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_tick_cooldowns(delta)
+	# 회피가 이동을 덮어쓴다. 피하는 중엔 자리 잡기를 하지 않는다.
+	if _tick_dodge(delta):
+		return
 	_move_toward_range(delta)
 	_tick_fire(delta)
+
+
+## 날아오는 탄을 보고 옆으로 대쉬한다. true 면 이번 프레임 이동을 회피가 책임진다.
+func _tick_dodge(delta: float) -> bool:
+	if _dash_cool > 0.0:
+		_dash_cool = maxf(_dash_cool - delta, 0.0)
+
+	# 대쉬 중
+	if _dash_left > 0.0:
+		_dash_left = maxf(_dash_left - delta, 0.0)
+		velocity.x = _dash_dir.x * dash_speed
+		velocity.z = _dash_dir.z * dash_speed
+		velocity.y = maxf(velocity.y, 0.0)
+		move_and_slide()
+		return true
+
+	# 반응 지연 — 보자마자 피하면 사람이 아니다
+	if _dodge_delay > 0.0:
+		_dodge_delay = maxf(_dodge_delay - delta, 0.0)
+		if _dodge_delay <= 0.0 and _dash_cool <= 0.0:
+			_start_dodge()
+			return _dash_left > 0.0
+		return false
+
+	if _dash_cool > 0.0:
+		return false
+	if _incoming_shot() != Vector3.ZERO:
+		_dodge_delay = dodge_reaction
+	return false
+
+
+## 나를 향해 날아오는 탄의 진행 방향. 없으면 ZERO.
+## 투사체는 `Area3D` 이고 `shooter` 를 들고 있다 — 내가 쏜 건 무시한다.
+func _incoming_shot() -> Vector3:
+	var world := get_parent()
+	if world == null:
+		return Vector3.ZERO
+	var root_node := world.get_parent()
+	if root_node == null:
+		root_node = world
+
+	for c in root_node.get_children():
+		var found := _check_shot(c)
+		if found != Vector3.ZERO:
+			return found
+		for gc in c.get_children():
+			found = _check_shot(gc)
+			if found != Vector3.ZERO:
+				return found
+	return Vector3.ZERO
+
+
+func _check_shot(n: Node) -> Vector3:
+	var area := n as Area3D
+	if area == null or not ("shooter" in area):
+		return Vector3.ZERO
+	if area.shooter == self:
+		return Vector3.ZERO
+
+	var to_me := global_position - area.global_position
+	to_me.y = 0.0
+	var dist := to_me.length()
+	if dist > dodge_radius or dist < 0.2:
+		return Vector3.ZERO
+
+	var dir: Vector3 = area._dir if ("_dir" in area) else Vector3.ZERO
+	dir.y = 0.0
+	if dir.length_squared() <= 0.0:
+		return Vector3.ZERO
+	# 나를 향해 오고 있는가
+	if dir.normalized().dot(to_me / dist) < dodge_threshold:
+		return Vector3.ZERO
+	return dir.normalized()
+
+
+## 날아오는 방향의 **옆으로** 뺀다. 뒤로 물러나면 탄을 따라가는 꼴이다.
+func _start_dodge() -> void:
+	var shot := _incoming_shot()
+	if shot == Vector3.ZERO:
+		return
+	var side := Vector3(-shot.z, 0.0, shot.x)
+	# 벽 쪽으로 빠지지 않게, 두 방향 중 아레나 가운데에 가까운 쪽을 고른다.
+	if side.dot(-global_position) < 0.0:
+		side = -side
+	_dash_dir = side.normalized()
+	_dash_left = dash_time
+	_dash_cool = dash_cooldown
+	Sfx.play("dash", 1.05, -8.0)
 
 
 func _idle(delta: float) -> void:
