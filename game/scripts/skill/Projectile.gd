@@ -27,6 +27,29 @@ const MASK_WORLD_AND_ENEMY := (1 << 0) | (1 << 2)
 ## 맞은 자리에 남기는 잔상이 사라지기까지(초)
 const FLASH_TIME := 0.12
 
+# ── 손맛 (2026-08-02) ─────────────────────────────────────────
+## 사용자 지적: "스킬을 쏘는거나 뭔가 하는게 날라가는게 별로야"
+## 종전엔 **그림 한 장이 등속으로 둥둥 떠갔다.** 쐈다는 것도, 맞혔다는 것도 화면에 안 보였다.
+## 아래는 그걸 만드는 최소 장치다. 유저가 그린 그림은 **계속 읽혀야 하므로**
+## 그림 자체를 가리지 않고 **주변**에 붙인다.
+
+## 초당 몇 바퀴 도는가. 그림이 살아 있는 느낌을 준다.
+const SPIN_TURNS := 0.85
+## 진행 방향으로 늘리는 비율. 빠를수록 늘어나 보여 속도감이 생긴다.
+const STRETCH := 0.28
+## 태어날 때 이만큼에서 시작해 제 크기로 커진다. "튀어나온" 느낌.
+const BIRTH_SCALE := 0.45
+const BIRTH_TIME := 0.07
+
+## 꼬리(잔상) — 지나간 자리에 흐려지는 복제를 남긴다.
+const TRAIL_INTERVAL := 0.022
+const TRAIL_LIFE := 0.17
+const TRAIL_ALPHA := 0.5
+
+## 명중 순간 터지는 링
+const BURST_TIME := 0.20
+const BURST_SCALE := 3.4
+
 var speed: float = 20.0
 var max_distance: float = 12.0
 var damage: float = 10.0
@@ -40,6 +63,14 @@ var mask: PackedByteArray = PackedByteArray()
 var _dir: Vector3 = Vector3.FORWARD
 var _travelled: float = 0.0
 var _spent: bool = false
+
+## 손맛용 상태
+var _sprite: Sprite3D
+var _lamp: OmniLight3D
+var _age: float = 0.0
+var _trail_wait: float = 0.0
+var _tex: ImageTexture
+var _sprite_size: float = 1.0
 
 
 ## add_child 하기 **전에** 부른다. 노드를 만지지 않으니 트리 밖에서도 안전하다.
@@ -103,11 +134,11 @@ func _build_look() -> void:
 	if drawn == null:
 		_fallback_ball()
 
-	var lamp := OmniLight3D.new()
-	lamp.light_color = color
-	lamp.light_energy = 1.6
-	lamp.omni_range = maxf(_radius() * 5.0, 3.0)
-	add_child(lamp)
+	_lamp = OmniLight3D.new()
+	_lamp.light_color = color
+	_lamp.light_energy = 1.6
+	_lamp.omni_range = maxf(_radius() * 5.0, 3.0)
+	add_child(_lamp)
 
 
 ## 마스크 → 스프라이트. 그린 게 없으면 null.
@@ -140,7 +171,46 @@ func _draw_sprite() -> Sprite3D:
 		span = maxf(float(shape_spec.get("length", span)), span)
 	sprite.pixel_size = span / side
 	add_child(sprite)
+
+	# 꼬리를 만들 때 이 텍스처와 크기를 그대로 복제한다.
+	_tex = tex
+	_sprite_size = span
+	_sprite = sprite
+	# 태어날 때 작게 시작한다 — "튀어나온" 느낌을 만든다.
+	sprite.scale = Vector3.ONE * BIRTH_SCALE
 	return sprite
+
+
+## 지나간 자리에 흐려지는 복제를 남긴다.
+## 그림을 가리지 않으면서 **어디서 어디로 갔는지**를 화면에 남기는 게 목적이다.
+func _drop_trail() -> void:
+	if _sprite == null or _tex == null:
+		return
+	var ghost := Sprite3D.new()
+	ghost.texture = _tex
+	ghost.region_enabled = _sprite.region_enabled
+	ghost.region_rect = _sprite.region_rect
+	ghost.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	ghost.shaded = false
+	ghost.transparent = true
+	ghost.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	ghost.pixel_size = _sprite.pixel_size
+	ghost.scale = _sprite.scale
+	ghost.modulate = Color(1, 1, 1, TRAIL_ALPHA)
+
+	var world := get_parent()
+	if world == null:
+		return
+	world.add_child(ghost)
+	ghost.global_position = global_position
+	ghost.rotation = _sprite.rotation
+
+	# 흐려지며 쪼그라든다. 남는 시간이 짧아야 "꼬리"지 "줄줄이"가 아니다.
+	var tw := ghost.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ghost, "modulate:a", 0.0, TRAIL_LIFE)
+	tw.tween_property(ghost, "scale", ghost.scale * 0.55, TRAIL_LIFE)
+	tw.chain().tween_callback(ghost.queue_free)
 
 
 ## 칠한 픽셀만 감싸는 사각형. 아무것도 안 칠했으면 크기 0.
@@ -207,8 +277,39 @@ func _physics_process(delta: float) -> void:
 	var step := speed * delta
 	global_position += _dir * step
 	_travelled += step
+	_age += delta
+	_animate(delta)
 	if _travelled >= max_distance:
 		_finish(null)
+
+
+## 날아가는 동안의 연출. 그림 자체는 안 가리고 **움직임**만 준다.
+func _animate(delta: float) -> void:
+	if _sprite == null:
+		return
+
+	# ① 태어날 때 확 커진다 — "튀어나왔다"
+	var born: float = clampf(_age / BIRTH_TIME, 0.0, 1.0)
+	var grow: float = lerpf(BIRTH_SCALE, 1.0, born * (2.0 - born))   # ease-out
+
+	# ② 진행 방향으로 늘린다 — 빠를수록 길어져 속도감이 생긴다.
+	#    빌보드라 화면상 세로가 진행축이 아니므로 가로로 늘리지 않고 **전체를 살짝** 늘린다.
+	var fast: float = clampf(speed / 28.0, 0.0, 1.0)
+	var stretch: float = 1.0 + STRETCH * fast
+	_sprite.scale = Vector3(grow, grow * stretch, grow)
+
+	# ③ 돈다. 그림이 살아 있는 느낌을 만드는 가장 싼 방법이다.
+	_sprite.rotation.z += TAU * SPIN_TURNS * delta
+
+	# ④ 빛이 맥박친다 — 멀리서도 "뭔가 날아온다" 가 읽힌다.
+	if _lamp != null:
+		_lamp.light_energy = 1.6 + sin(_age * 22.0) * 0.35
+
+	# ⑤ 꼬리
+	_trail_wait -= delta
+	if _trail_wait <= 0.0:
+		_trail_wait = TRAIL_INTERVAL
+		_drop_trail()
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -230,7 +331,8 @@ func _on_body_entered(body: Node3D) -> void:
 	_finish(null)
 
 
-## 판정을 끄고 잠깐 남았다가 사라진다. 맞은 순간이 눈에 보이게 하려는 것.
+## 판정을 끄고 **터진 뒤** 사라진다.
+## 종전엔 그냥 0.12초 있다 없어졌다 — 맞았는지 안 맞았는지 화면에 안 보였다.
 func _finish(target: Node3D) -> void:
 	if _spent:
 		return
@@ -238,5 +340,23 @@ func _finish(target: Node3D) -> void:
 	hit.emit(target)
 	set_deferred("monitoring", false)
 	set_physics_process(false)
+	_burst()
 	await get_tree().create_timer(FLASH_TIME).timeout
 	queue_free()
+
+
+## 맞은 자리에서 터진다. 그림이 확 커지며 사라지고 빛이 한 번 튄다.
+func _burst() -> void:
+	if _sprite != null:
+		var tw := _sprite.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(_sprite, "scale", _sprite.scale * BURST_SCALE, BURST_TIME) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_sprite, "modulate:a", 0.0, BURST_TIME)
+	if _lamp != null:
+		# 빛이 한 번 확 튀었다 꺼진다. 「퍽」 하는 느낌은 이게 만든다.
+		var lt := _lamp.create_tween()
+		lt.tween_property(_lamp, "light_energy", 7.0, 0.04)
+		lt.tween_property(_lamp, "light_energy", 0.0, BURST_TIME)
+		var rt := _lamp.create_tween()
+		rt.tween_property(_lamp, "omni_range", _lamp.omni_range * 2.6, BURST_TIME)

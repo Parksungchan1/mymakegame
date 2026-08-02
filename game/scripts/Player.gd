@@ -203,9 +203,22 @@ func _attach_shake() -> void:
 
 
 ## 「쿵」. 적을 쓰러뜨렸을 때 부른다.
+## 흔들림 + **히트스톱**. 아트 판단: 히트스톱이 "제일 싸고 제일 센" 타격감 장치다.
+## 시간을 아주 잠깐 늦추면 뇌가 "묵직하게 맞았다" 로 읽는다.
 func shake_kill() -> void:
 	if _shake != null:
 		_shake.kill()
+	_hitstop(0.07)
+
+
+## 아주 짧게 시간을 늦춘다. 길면 렉으로 느껴지므로 0.1초를 넘기지 않는다.
+func _hitstop(seconds: float) -> void:
+	if seconds <= 0.0 or Engine.time_scale < 1.0:
+		return   # 이미 걸려 있으면 겹쳐 걸지 않는다
+	Engine.time_scale = 0.05
+	# 늦춰진 시간 기준이 아니라 **실제 시간** 기준으로 풀어야 한다.
+	await get_tree().create_timer(seconds, true, false, true).timeout
+	Engine.time_scale = 1.0
 
 
 ## 맞혔을 때. 죽인 것보다 훨씬 약하다.
@@ -601,6 +614,24 @@ func _spawn(slot: String, dir: Vector3, shape: Dictionary, dmg: float) -> void:
 	})
 	world.add_child(shot)
 	shot.global_position = _spawn_point(shape)
+	_muzzle_flash(entry.get("color", Color.WHITE))
+
+
+## 총구 섬광. 발사 순간이 화면에 보여야 "쐈다" 가 된다.
+## 종전엔 마법봉 끝 발광이 **상시로 켜져 있어서** 쏘는 순간이 전혀 티가 안 났다.
+func _muzzle_flash(col: Color) -> void:
+	if _muzzle == null:
+		return
+	var flash := OmniLight3D.new()
+	flash.light_color = col
+	flash.light_energy = 0.0
+	flash.omni_range = 4.5
+	_muzzle.add_child(flash)
+	# 확 켜졌다 빠르게 꺼진다. 길면 「빛나는 봉」이지 「발사」가 아니다.
+	var tw := flash.create_tween()
+	tw.tween_property(flash, "light_energy", 5.5, 0.03)
+	tw.tween_property(flash, "light_energy", 0.0, 0.11)
+	tw.tween_callback(flash.queue_free)
 
 
 ## 투사체가 태어날 자리.
