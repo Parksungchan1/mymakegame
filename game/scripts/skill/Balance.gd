@@ -131,7 +131,43 @@ const T_COMPLEXITY_SHARP: float = 2.5 ## 둘레²/(4π·면적). 1.0=완전한 �
 ## 채움률은 같은 손떨림에서 0.67 → 0.61 밖에 안 움직여 훨씬 안정적이다.
 ## 별·번개·십자는 채움률이 0.24~0.48 이라 이 문턱으로 원과 깨끗하게 갈린다.
 const T_FILL_SHARP: float = 0.50      ## 채움률이 이 미만이어야 뾰족함
-const T_MIN_BLOB_PIXELS: int = 4      ## 이보다 작은 덩어리는 노이즈로 무시
+const T_MIN_BLOB_PIXELS: int = 4      ## 절대 하한. 이보다 작은 덩어리는 언제나 노이즈다
+
+## 【2026-08-03 신설 · [S3] 4픽셀 구멍을 닫는다】 **상대 하한 — 가장 큰 덩어리 대비 비율.**
+## 덩어리는 이 비율보다 작으면 **면적이 몇 픽셀이든 노이즈로 본다.**
+## 최종 하한 = `max(T_MIN_BLOB_PIXELS, ceil(T_BLOB_RELATIVE_MIN × 가장 큰 덩어리))`.
+##
+## 【왜 절대 문턱을 올리는 것으로는 못 막나 — 이게 이 상수가 존재하는 이유다】
+## 절대 문턱을 N 으로 올리면 유저는 **N 픽셀짜리 점을 찍는다.** 비용이 그림 크기와 무관한
+## **상수**로 남는 한, 「뭘 그리든 구석에 점 하나」라는 최적 플레이는 사라지지 않고
+## 점이 조금 커질 뿐이다. **어렵게 만드는 것과 닫는 것은 다르다.**
+## 상대 하한은 비용을 **그림에 비례**하게 만든다 — 그리고 그림에 비례하는 크기의 덩어리는
+## 이미 「그림의 일부」다. 그래서 흩어짐 판정이 **거짓이 아니게 된다.**
+##
+## 【0.25 인 이유 — 면적 1/4 = 지름 1/2】
+## 흩어짐은 **덩어리 하나가 탄 하나**가 되는 태그이고, 탄은 전부 **같은 크기**로 나간다
+## (`pellet_radius` 는 태그·탄 수와 무관하게 `유효 명중 폭 ÷ 2`). 그러면 화면에서
+## 크기가 크게 다른 덩어리들을 「같은 크기의 탄 N발」로 바꾸는 것 자체가 거짓말이다.
+## → 기준을 **「가장 큰 덩어리의 절반 지름」**으로 잡는다. 면적으로는 그 제곱인 0.25.
+##   제작창에 한 줄로 설명할 수 있는 형태여야 한다는 조건도 이 값이 만족한다.
+##
+## 【실측으로 고른 값 — 두 방향의 대가를 재서 비교했다 (2026-08-03, Godot 실행)】
+##   막는 쪽: 별5(본체 112px)를 흩어짐으로 만들려면 **4px → 36px(6×6)** 이 필요해진다.
+##            원 r6 도 36px, 막대 22×3(66px)은 25px. **비용이 그림에 비례한다.**
+##   놓치는 쪽: 사람이 찍은 점 무리(점 3·5·7개 × 300회 무작위 크기):
+##            지름비 0.63 이상(보통 손떨림)이면 **태그·탄 수 유지 100%**,
+##            지름비 0.31(막 찍음)에서도 **태그 유지 96~100%**. 흩어짐이 아니게 되는 일은 없다.
+##   놓쳤을 때의 대가: 흩어짐 안에서 탄 수만 달라지고 **정조준 평균 40.529~41.235(1.7%)**,
+##            유효 명중 폭·쿨타임·총 데미지는 **완전히 동일**.
+##   → **잘못 지웠을 때 1.7% · 안 지웠을 때 57%.** 엄한 쪽으로 기우는 것이 옳다.
+##   0.15/0.20 도 재봤다. 막는 힘이 각각 25px·30px 로 약해지는데 얻는 것은
+##   「막 찍은 점 무리의 탄 수 유지 97%/85% → 100%」 뿐이라 바꿀 값어치가 없다.
+##
+## 【이 규칙이 새 구멍을 안 여는 이유】 **덩어리를 지우기만 한다.**
+## 덩어리 수는 절대 늘지 않으므로 **어떤 그림도 이 규칙 때문에 새로 흩어짐이 되지 않는다.**
+## 지워져서 태그가 둥긂/길쭉함이 되는 경우는 있는데(정조준 60.000), 그건 「그 그림을
+## 그냥 그리는 것」과 같은 값이라 새로 얻는 것이 없다. 상한이 안 움직인다.
+const T_BLOB_RELATIVE_MIN: float = 0.25
 
 ## 쿨타임 범위(초) — 예산을 다 쓰면 MAX, 아끼면 MIN
 const COOLDOWN_MIN: float = 0.6
@@ -847,6 +883,11 @@ const EFFECT_COST_REFLECT: float = 0.0   ## 같음
 ##      → 잡픽셀이 섞인 그림에서는 `aspect`·`fill_ratio`·`filled`·`complexity` **값이 달라진다.**
 ##      (예: 원 r6 + 좌우 끝 1픽셀 → 종횡 2.50 → **1.00**, 태그 길쭉함 → **둥긂**)
 ##      투사체 스프라이트는 원본 마스크를 그대로 쓰므로 잡픽셀도 **보이기는 한다** — 판정에만 안 쓴다.
+##  (3) 【2026-08-03】 **「잡픽셀」의 정의에 상대 하한이 들어갔다.** 종전에는 4픽셀 이상이면
+##      크기와 상관없이 진짜 덩어리였고, 그래서 구석에 2×2 를 찍는 것만으로 어떤 그림이든
+##      흩어짐이 됐다. 이제 **가장 큰 덩어리의 25%(지름의 절반) 미만인 덩어리도 노이즈**다.
+##      → `blobs` 뿐 아니라 `filled`·`fill_ratio`·`aspect`·`elongation`·`complexity` 가 전부
+##      같이 달라진다(다섯 지표가 같은 그림을 본다는 (2)의 원칙 그대로). `T_BLOB_RELATIVE_MIN` 참조.
 func analyze_mask(mask: PackedByteArray) -> Dictionary:
 	var out := {
 		"filled": 0,
@@ -954,12 +995,27 @@ func _elongation(mask: PackedByteArray) -> float:
 ## [실측] 원 r3 + 구석에 1픽셀 2개 → 노이즈 제거 전 신장도 3.55(길쭉함 오판) / 제거 후 1.00(둥긂).
 ##   ⚠ 노이즈 제거가 없으면 **신장도 전환이 오히려 이 구멍을 넓힌다** — 바운딩박스는 잡픽셀에
 ##   비례해서 커지지만 2차 모멘트는 **거리의 제곱**으로 반응하기 때문이다. 두 조치는 세트다.
-## ⚠ **남은 구멍**: 4픽셀짜리 점(2×2)은 T_MIN_BLOB_PIXELS 기준으로 「진짜 덩어리」라
-##   여전히 덩어리 수를 늘려 흩어짐이 된다. 그건 이 함수가 아니라 T_MIN_BLOB_PIXELS 값의
-##   문제이고, 값을 올리면 흩어짐 탄 수 매핑을 다시 검산해야 해서 이번 개정에 넣지 않았다.
+## 【2026-08-03 개정 · 4픽셀 구멍 차단】 하한이 **절대(4px) + 상대(가장 큰 덩어리의 25%)**
+##   두 겹이 됐다. 종전에는 구석 2×2(4픽셀)이 「진짜 덩어리」로 통과해, 무엇을 그렸든
+##   1,024칸 중 4칸만 바꿔 흩어짐으로 만들 수 있었다(별5 정조준 25.630 → 41.235).
+##   근거·값 선정은 `T_BLOB_RELATIVE_MIN` 상수 블록에 있다.
 func _denoised(mask: PackedByteArray) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(GRID * GRID)
+	var comps := _blob_components(mask)
+	var floor_px := _blob_floor(comps)
+	for comp in comps:
+		if comp.size() >= floor_px:
+			for i in comp:
+				out[i] = 1
+	return out
+
+
+## 8방향 연결 성분을 **거르지 않고 전부** 돌려준다(각 성분 = 픽셀 인덱스 배열).
+## `_denoised` 와 `_count_blobs` 가 **같은 목록·같은 하한**을 쓰게 하려고 뽑아 놓은 것이다.
+## 두 곳에 규칙을 따로 적으면 언젠가 한쪽만 고쳐진다 — 이 프로젝트에서 실제로 네 번 났다.
+func _blob_components(mask: PackedByteArray) -> Array:
+	var comps: Array = []
 	var seen := PackedByteArray()
 	seen.resize(GRID * GRID)
 	for start in GRID * GRID:
@@ -983,10 +1039,18 @@ func _denoised(mask: PackedByteArray) -> PackedByteArray:
 				if mask[ni] == 1 and seen[ni] == 0:
 					seen[ni] = 1
 					stack.append(ni)
-		if comp.size() >= T_MIN_BLOB_PIXELS:
-			for i in comp:
-				out[i] = 1
-	return out
+		comps.append(comp)
+	return comps
+
+
+## 이 그림에서 「그림의 일부(= 탄 하나)」로 쳐 주는 **최소 덩어리 크기(픽셀)**.
+## 절대 하한과 상대 하한 중 **큰 쪽**이다. 상대 하한의 근거는 `T_BLOB_RELATIVE_MIN` 참조.
+## 가장 큰 덩어리는 자기 자신과 비교하므로 **언제나 통과한다** — 그림이 통째로 사라지지 않는다.
+func _blob_floor(comps: Array) -> int:
+	var biggest := 0
+	for comp in comps:
+		biggest = maxi(biggest, comp.size())
+	return maxi(T_MIN_BLOB_PIXELS, int(ceil(T_BLOB_RELATIVE_MIN * float(biggest))))
 
 
 ## 둘레²/(4π·면적). 완전한 원이면 1.0, 뾰족·가늘수록 커진다.
@@ -1030,33 +1094,17 @@ const NEIGHBORS: Array[Vector2i] = [
 ]
 
 
-## 8방향 연결 요소 개수. 아주 작은 점은 노이즈로 세지 않는다.
+## 8방향 연결 요소 개수. 노이즈(절대 4px 미만 · 가장 큰 덩어리의 25% 미만)는 세지 않는다.
+## `analyze_mask` 는 이미 `_denoised` 를 거친 마스크를 넘기므로 여기서 걸릴 것이 남아 있지
+## 않다(같은 하한을 두 번 적용해도 결과가 같다 — 가장 큰 덩어리가 안 바뀌므로 하한도 같다).
+## 그래도 규칙을 여기에도 두는 이유는 **원본 마스크를 직접 넘기는 호출이 생겨도
+## 흩어짐이 새지 않게** 하기 위해서다. 규칙 자체는 `_blob_floor` 한 곳에만 적혀 있다.
 func _count_blobs(mask: PackedByteArray) -> int:
-	var seen := PackedByteArray()
-	seen.resize(GRID * GRID)
+	var comps := _blob_components(mask)
+	var floor_px := _blob_floor(comps)
 	var blobs := 0
-	for start in GRID * GRID:
-		if mask[start] == 0 or seen[start] == 1:
-			continue
-		var size := 0
-		var stack: Array[int] = [start]
-		seen[start] = 1
-		while not stack.is_empty():
-			var i: int = stack.pop_back()
-			size += 1
-			var x := i % GRID
-			@warning_ignore("integer_division")
-			var y := i / GRID
-			for d in NEIGHBORS:
-				var nx := x + d.x
-				var ny := y + d.y
-				if nx < 0 or ny < 0 or nx >= GRID or ny >= GRID:
-					continue
-				var ni := ny * GRID + nx
-				if mask[ni] == 1 and seen[ni] == 0:
-					seen[ni] = 1
-					stack.append(ni)
-		if size >= T_MIN_BLOB_PIXELS:
+	for comp in comps:
+		if comp.size() >= floor_px:
 			blobs += 1
 	return blobs
 
