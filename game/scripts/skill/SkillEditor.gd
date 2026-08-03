@@ -36,6 +36,8 @@ var _pending_slot: String = ""
 var _save_btn: Button
 var _pen_btn: Button
 var _eraser_btn: Button
+var _book_row: HBoxContainer
+var _book_hint: Label
 
 
 ## 그리기 ↔ 지우개 전환. 두 버튼이 항상 서로 반대 상태가 되게 묶는다.
@@ -121,8 +123,140 @@ func _build() -> void:
 	_build_header()
 	_build_slot_row()
 	_build_body()
+	_build_book()
 	_build_footer()
 	_build_confirm()
+
+
+## 도안첩 — 그린 것을 QWER 밖에 보관한다.
+## 2026-08-03 사용자 승인. 그 전까지 다섯 번째를 그리면 넷 중 하나가 말없이 사라졌다.
+func _build_book() -> void:
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	_root.add_child(head)
+
+	var title := Label.new()
+	title.text = "도안첩"
+	title.add_theme_font_size_override("font_size", 17)
+	head.add_child(title)
+
+	_book_hint = Label.new()
+	_book_hint.add_theme_font_size_override("font_size", 12)
+	_book_hint.modulate = Color(1, 1, 1, 0.55)
+	head.add_child(_book_hint)
+
+	var keep := Button.new()
+	keep.text = "＋ 지금 그림을 도안첩에 넣기"
+	keep.pressed.connect(_on_keep_pressed)
+	head.add_child(keep)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 96)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_root.add_child(scroll)
+
+	_book_row = HBoxContainer.new()
+	_book_row.add_theme_constant_override("separation", 8)
+	scroll.add_child(_book_row)
+
+	SkillDB.book_changed.connect(_refresh_book)
+	_refresh_book()
+
+
+## 보관함을 다시 그린다. 한 칸 = 그림 + 이름 + 전적 + 「끼우기」.
+func _refresh_book() -> void:
+	if _book_row == null:
+		return
+	for c in _book_row.get_children():
+		c.queue_free()
+
+	var list: Array = SkillDB.book()
+	_book_hint.text = "%d / %d 장 — 칸을 눌러 QWER 에 끼운다" % [list.size(), SkillDB.BOOK_LIMIT]
+	if list.is_empty():
+		var empty := Label.new()
+		empty.text = "아직 없다. 그림을 그리고 「＋ 도안첩에 넣기」를 누르면 여기 쌓인다."
+		empty.add_theme_font_size_override("font_size", 12)
+		empty.modulate = Color(1, 1, 1, 0.45)
+		_book_row.add_child(empty)
+		return
+
+	for e in list:
+		_book_row.add_child(_build_book_card(e))
+
+
+func _build_book_card(e: Dictionary) -> Control:
+	var id := int(e.get("id", 0))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 2)
+
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(64, 64)
+	btn.tooltip_text = "%s — 누르면 지금 슬롯(%s)에 끼운다" % [String(e.get("name", "")), _slot]
+	btn.icon = _card_icon(e)
+	btn.expand_icon = true
+	btn.pressed.connect(func() -> void:
+		SkillDB.book_equip(id, _slot)
+		_load_slot(_slot))
+	col.add_child(btn)
+
+	var name_label := Label.new()
+	name_label.text = String(e.get("name", ""))
+	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(name_label)
+
+	# 전적 — 「이 도안이 몇 번 맞혔는지」. 잘 그릴 이유의 피드백이다.
+	var st: Dictionary = e.get("stats", {})
+	var stat := Label.new()
+	stat.text = "명중 %d · 처치 %d" % [int(st.get("hits", 0)), int(st.get("kills", 0))]
+	stat.add_theme_font_size_override("font_size", 10)
+	stat.modulate = Color(1, 1, 1, 0.5)
+	stat.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(stat)
+
+	var del := Button.new()
+	del.text = "버리기"
+	del.add_theme_font_size_override("font_size", 10)
+	del.pressed.connect(func() -> void: SkillDB.book_delete(id))
+	col.add_child(del)
+	return col
+
+
+## 도안 그림을 작은 아이콘으로. 투사체·HUD 와 같은 방식이다.
+func _card_icon(e: Dictionary) -> ImageTexture:
+	var mask: PackedByteArray = e.get("mask", PackedByteArray())
+	var g := Balance.GRID
+	if mask.size() < g * g:
+		return null
+	var col: Color = e.get("color", Color.WHITE)
+	var img := Image.create(g, g, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var filled := 0
+	for y in g:
+		for x in g:
+			if mask[y * g + x] != 0:
+				img.set_pixel(x, y, col)
+				filled += 1
+	if filled == 0:
+		return null
+	return ImageTexture.create_from_image(img)
+
+
+## 지금 그리고 있는 것을 보관함에 넣는다.
+func _on_keep_pressed() -> void:
+	var skill_name := _name_edit.text.strip_edges()
+	if skill_name.is_empty():
+		skill_name = "이름없는 도안"
+	var made := SkillDB.make_skill(
+		skill_name, _canvas.get_mask(), _color_pick.color, _damage.value, _range.value)
+	var id := SkillDB.book_save(made)
+	if id < 0:
+		_cost_label.text = "도안첩이 가득 찼다 — 버리고 다시 넣어라"
+		_cost_label.modulate = OVER_COLOR
+	else:
+		_cost_label.text = "도안첩에 넣었다 — %s" % skill_name
+		_cost_label.modulate = OK_COLOR
 
 
 func _build_confirm() -> void:

@@ -197,6 +197,8 @@ func _reload_slot(slot: String) -> void:
 		# 기획 담당이 판정 임계값을 바꾸면 저장된 스킬에도 바로 반영돼야 한다.
 		metrics = Balance.analyze_mask(entry["mask"])
 		entry["tag"] = Balance.tag_from_metrics(metrics)
+		# 도안첩에 같은 그림이 있으면 그 도안의 전적으로 쌓는다.
+		entry["book_id"] = _find_book_id(entry["mask"])
 	entry["metrics"] = metrics
 	# 지표를 함께 넘겨야 **같은 태그 안에서도 어떻게 그렸는지가 전투에 반영된다.**
 	# (흩어짐의 탄 수, 뾰족함의 탄 수·퍼짐각 등 — 안 넘기면 태그 기본값으로만 나간다)
@@ -631,6 +633,15 @@ func _tick_skill(delta: float) -> void:
 		break
 
 
+## 지금 낀 그림이 도안첩의 어느 도안인지 찾는다. 없으면 0.
+## 그림이 곧 신원이다 — 이름을 바꿔도 같은 그림이면 같은 도안의 전적이 쌓인다.
+func _find_book_id(mask: PackedByteArray) -> int:
+	for e in SkillDB.book():
+		if (e.get("mask", PackedByteArray()) as PackedByteArray) == mask:
+			return int(e.get("id", 0))
+	return 0
+
+
 ## 그 슬롯의 Balance 계산 결과. 슬롯이 아직 안 읽혔으면 빈 Dictionary.
 func _derived(slot: String) -> Dictionary:
 	var entry: Dictionary = _slots.get(slot, {})
@@ -718,6 +729,15 @@ func _spawn(slot: String, dir: Vector3, shape: Dictionary, dmg: float) -> void:
 		"mask": entry.get("mask", PackedByteArray()),
 		"shooter": self,
 	})
+	# 이 도안의 전적을 쌓는다. 「이 그림이 몇 번 맞혔는지」가 잘 그릴 이유의 피드백이다.
+	var book_id := int(entry.get("book_id", 0))
+	if book_id > 0:
+		SkillDB.record(book_id, 1, 0, 0.0, 0)
+		shot.hit.connect(func(target: Node3D) -> void:
+			if target == null:
+				return
+			var killed: int = 1 if (target.has_method("is_dead") and target.is_dead()) else 0
+			SkillDB.record(book_id, 0, 1, dmg, killed))
 	world.add_child(shot)
 	shot.global_position = _spawn_point(shape)
 	_muzzle_flash(entry.get("color", Color.WHITE))
