@@ -32,6 +32,20 @@
 [ext_resource type="Script" path="res://scripts/Dummy.gd" id="3_dummy"]
 [ext_resource type="Script" path="res://scripts/SkillHud.gd" id="4_hud"]
 
+; 마루 텍스처 — **이 프로젝트 최초의 에셋 파일**이다(2026-08-03).
+; Higgsfield(Nano Banana 2)로 뽑고, 세로 이음매는 아래쪽 96줄을 위쪽에 교차 페이드해서
+; 없앴다. 실측: 상하 이음매 97.57 → 2.35 (이미지 내부 인접 행 평균차 4.88보다 작다).
+; 절차적 노이즈로는 「판자 한 장 한 장」이 안 나온다 — 노이즈는 얼룩이지 구조가 아니다.
+; ⚠ **albedo_color 를 전부 다시 계산했다.** 절차적 노이즈는 그라디언트가 0.82~1.06,
+; 즉 **거의 흰색**이라 색은 사실상 `albedo_color` 혼자 냈다. 실제 텍스처는 자기 밝기를
+; 갖고 있어서(나무 0.68 · 천 0.58 · 종이 0.89 · 벽 0.65) 그대로 곱하면 방이 어두워진다.
+; 그래서 `새 albedo = 옛 albedo × 옛노이즈평균 ÷ 새텍스처 채널평균` 으로 채널별 보정했다.
+; **방의 색 균형은 종전과 같게 두고 「표면」만 바꾸는 것**이 목적이다.
+[ext_resource type="Texture2D" path="res://art/wood.png" id="5_wood_tex"]
+[ext_resource type="Texture2D" path="res://art/fabric.png" id="6_fabric_tex"]
+[ext_resource type="Texture2D" path="res://art/paper.png" id="7_paper_tex"]
+[ext_resource type="Texture2D" path="res://art/wall.png" id="8_wall_tex"]
+
 ; 배경은 어둡게 두되 앰비언트를 올려 물체가 검게 죽지 않게 한다.
 ; 글로우는 마법 이펙트용 — 밝은 투사체만 번지게 문턱(threshold)을 1.0 로 잡았다.
 [sub_resource type="Environment" id="env"]
@@ -213,44 +227,60 @@ size = Vector2(1, 1)
 ; ⚠ 색 규칙은 그대로다 — 방 전체 채도를 낮게. 스킬 투사체가 유저 마음대로 색이라
 ;   배경이 색을 먹으면 안 된다. **이번에 늘린 건 색이 아니라 「표면」이다.**
 
-; 마루 — 나무결. uv1_scale 의 u:v 를 6:1 로 벌려 노이즈를 늘려서 결(grain)을 만든다.
+; 마루 — **실제 판자 텍스처**(res://art/wood.png). 다른 나무 재질(침대·책상·의자)은
+; 여전히 절차적 노이즈다 — 마루만 바꾼다. 바닥은 화면 면적 1등이라 효과가 가장 크고,
+; 여기서 스타일이 맞는지 확인한 뒤에 나머지로 넓힌다.
+;
+; uv1_scale 은 **정사각(4,4)** 이다. 종전 (13,3) 은 노이즈를 한 방향으로 늘여서
+; 가짜 결을 만들던 값인데, 판자가 그려져 있는 텍스처에 쓰면 판자가 찌그러진다.
+; 60m ÷ 4타일 = 15m/타일, 텍스처의 판자 9줄 → 판자 폭 ≒ 1.7m ≒ 캐릭터 키.
+; 기획의 "6m 방에 키 17cm 사람" 비율(실제 마루 판자 15cm : 사람 170cm)과 맞는다.
+;
+; 노멀은 절차적 nrm_wood 를 남겨 미세 요철만 준다. normal_scale 을 0.35 → 0.15 로
+; 낮췄다 — 판자 결이 이제 알베도에 있어서, 노멀까지 세면 표면이 울렁거린다.
 [sub_resource type="StandardMaterial3D" id="mat_floor"]
-albedo_color = Color(0.5, 0.43, 0.35, 1)
+albedo_color = Color(0.594, 0.591, 0.624, 1)
 roughness = 0.85
-albedo_texture = SubResource("tex_wood")
+albedo_texture = ExtResource("5_wood_tex")
 normal_enabled = true
-normal_scale = 0.35
+normal_scale = 0.15
 normal_texture = SubResource("nrm_wood")
-uv1_scale = Vector3(13, 3, 1)
+uv1_scale = Vector3(4, 4, 1)
 
+; 러그 — 실제 리넨 직조. 첫 생성물은 킬림(마름모) 무늬가 강해서 버렸다.
+; 러그는 「여기가 싸우는 자리」를 알려주는 차분한 표식이라 무늬가 있으면 투사체와 싸운다.
+; uv1_scale 은 종전 값을 그대로 둔다 — 러그 22×18 에 (9,7) 이면 타일 ≒ 2.4×2.6 으로
+; 거의 정사각이라 직조가 안 찌그러진다.
 [sub_resource type="StandardMaterial3D" id="mat_rug"]
-albedo_color = Color(0.43, 0.42, 0.43, 1)
+albedo_color = Color(0.674, 0.688, 0.778, 1)
 roughness = 0.97
-albedo_texture = SubResource("tex_fabric")
+albedo_texture = ExtResource("6_fabric_tex")
 normal_enabled = true
-normal_scale = 0.4
+normal_scale = 0.2
 normal_texture = SubResource("nrm_fabric")
 uv1_scale = Vector3(9, 7, 1)
 
 [sub_resource type="StandardMaterial3D" id="mat_rug_inner"]
-albedo_color = Color(0.49, 0.48, 0.48, 1)
+albedo_color = Color(0.768, 0.787, 0.869, 1)
 roughness = 0.97
-albedo_texture = SubResource("tex_fabric")
+albedo_texture = ExtResource("6_fabric_tex")
 normal_enabled = true
-normal_scale = 0.4
+normal_scale = 0.2
 normal_texture = SubResource("nrm_fabric")
 uv1_scale = Vector3(7, 5, 1)
 
 ; 벽 — 석고. 고정 카메라라 북쪽 벽은 늘 배경이다. 무늬는 「있는 듯 없는 듯」이 정답 —
 ; 노멀만 약하게(0.45) 주고 알베도 변화는 거의 없다. 투사체가 여기서 튀어야 한다.
+; uv1_scale (6,2) → (8,2.4). 벽은 60×18 이라 (8,2.4) 가 정확히 정사각 타일(7.5×7.5)이다.
+; 종전 (6,2) 는 노이즈를 가로로 늘이려던 값인데, 실제 스투코를 늘이면 얼룩이 흐른다.
 [sub_resource type="StandardMaterial3D" id="mat_wall"]
-albedo_color = Color(0.46, 0.45, 0.44, 1)
+albedo_color = Color(0.666, 0.679, 0.71, 1)
 roughness = 0.93
-albedo_texture = SubResource("tex_plaster")
+albedo_texture = ExtResource("8_wall_tex")
 normal_enabled = true
-normal_scale = 0.18
+normal_scale = 0.1
 normal_texture = SubResource("nrm_plaster")
-uv1_scale = Vector3(6, 2, 1)
+uv1_scale = Vector3(8, 2.4, 1)
 
 [sub_resource type="StandardMaterial3D" id="mat_trim"]
 albedo_color = Color(0.62, 0.61, 0.62, 1)
@@ -269,30 +299,34 @@ normal_scale = 0.4
 normal_texture = SubResource("nrm_wood")
 uv1_scale = Vector3(5, 1.5, 1)
 
+; ⚠ 이불·베개는 보정값이 1.0 을 넘어(각각 B 1.18 · 전 채널 1.16~1.39) 잘렸다.
+;    그래서 종전의 **살짝 푸른 기가 빠지고 밝은 중성색**이 된다. 천 텍스처가 따뜻한
+;    회색이라 1.0 안에서 차가운 밝은 색을 만들 수가 없다. 침구는 원래 방에서 가장 밝은
+;    물건이라 밝기만 지키면 되고, 푸른 기는 담요(청록)가 대신 낸다.
 [sub_resource type="StandardMaterial3D" id="mat_bedding"]
-albedo_color = Color(0.6, 0.61, 0.65, 1)
+albedo_color = Color(0.94, 1, 1, 1)
 roughness = 0.97
-albedo_texture = SubResource("tex_fabric")
+albedo_texture = ExtResource("6_fabric_tex")
 normal_enabled = true
-normal_scale = 0.55
+normal_scale = 0.28
 normal_texture = SubResource("nrm_fabric")
 uv1_scale = Vector3(5, 4, 1)
 
 [sub_resource type="StandardMaterial3D" id="mat_pillow"]
-albedo_color = Color(0.74, 0.74, 0.77, 1)
+albedo_color = Color(1, 1, 1, 1)
 roughness = 0.97
-albedo_texture = SubResource("tex_fabric")
+albedo_texture = ExtResource("6_fabric_tex")
 normal_enabled = true
-normal_scale = 0.6
+normal_scale = 0.3
 normal_texture = SubResource("nrm_fabric")
 uv1_scale = Vector3(3, 2, 1)
 
 [sub_resource type="StandardMaterial3D" id="mat_blanket"]
-albedo_color = Color(0.31, 0.47, 0.53, 1)
+albedo_color = Color(0.486, 0.77, 0.959, 1)
 roughness = 0.97
-albedo_texture = SubResource("tex_fabric")
+albedo_texture = ExtResource("6_fabric_tex")
 normal_enabled = true
-normal_scale = 0.7
+normal_scale = 0.35
 normal_texture = SubResource("nrm_fabric")
 uv1_scale = Vector3(4, 3, 1)
 
@@ -317,14 +351,17 @@ normal_texture = SubResource("nrm_wood")
 uv1_scale = Vector3(4, 2, 1)
 
 ; 판지 — 골판지. 결을 한 방향으로 강하게 늘여서 「종이」로 읽히게 했다.
+; uv1_scale (8,2) → (4,4). 종전 4:1 은 노이즈를 늘여 **골판지 골**을 흉내 내던 값이다.
+; 실제 종이 섬유를 4:1 로 늘이면 골이 아니라 그냥 번진 얼룩이 된다. 정사각으로 돌리고,
+; 골 흉내는 포기했다 — 섬유가 실제로 보이는 쪽이 「판지」로 더 잘 읽힌다.
 [sub_resource type="StandardMaterial3D" id="mat_cardboard"]
-albedo_color = Color(0.58, 0.47, 0.34, 1)
+albedo_color = Color(0.599, 0.503, 0.397, 1)
 roughness = 0.94
-albedo_texture = SubResource("tex_paper")
+albedo_texture = ExtResource("7_paper_tex")
 normal_enabled = true
-normal_scale = 0.65
+normal_scale = 0.32
 normal_texture = SubResource("nrm_paper")
-uv1_scale = Vector3(8, 2, 1)
+uv1_scale = Vector3(4, 4, 1)
 
 ; 머그컵 — **일부러 텍스처를 안 넣었다.** 도자기는 이 방에서 유일하게 매끈한 물건이다.
 ; 다른 게 전부 거칠어졌기 때문에 **매끈함 자체가 「재질이 다르다」는 신호**가 된다.
@@ -336,29 +373,29 @@ rim_enabled = true
 rim = 0.35
 
 [sub_resource type="StandardMaterial3D" id="mat_book_a"]
-albedo_color = Color(0.33, 0.45, 0.36, 1)
+albedo_color = Color(0.341, 0.482, 0.42, 1)
 roughness = 0.8
-albedo_texture = SubResource("tex_paper")
+albedo_texture = ExtResource("7_paper_tex")
 normal_enabled = true
-normal_scale = 0.3
+normal_scale = 0.15
 normal_texture = SubResource("nrm_paper")
 uv1_scale = Vector3(2.5, 2, 1)
 
 [sub_resource type="StandardMaterial3D" id="mat_book_b"]
-albedo_color = Color(0.47, 0.33, 0.42, 1)
+albedo_color = Color(0.486, 0.353, 0.491, 1)
 roughness = 0.8
-albedo_texture = SubResource("tex_paper")
+albedo_texture = ExtResource("7_paper_tex")
 normal_enabled = true
-normal_scale = 0.3
+normal_scale = 0.15
 normal_texture = SubResource("nrm_paper")
 uv1_scale = Vector3(2.5, 2, 1)
 
 [sub_resource type="StandardMaterial3D" id="mat_book_c"]
-albedo_color = Color(0.32, 0.35, 0.5, 1)
+albedo_color = Color(0.331, 0.375, 0.584, 1)
 roughness = 0.8
-albedo_texture = SubResource("tex_paper")
+albedo_texture = ExtResource("7_paper_tex")
 normal_enabled = true
-normal_scale = 0.3
+normal_scale = 0.15
 normal_texture = SubResource("nrm_paper")
 uv1_scale = Vector3(2.5, 2, 1)
 
@@ -386,11 +423,11 @@ albedo_texture = SubResource("tex_wood")
 uv1_scale = Vector3(9, 1, 1)
 
 [sub_resource type="StandardMaterial3D" id="mat_cushion"]
-albedo_color = Color(0.51, 0.44, 0.55, 1)
+albedo_color = Color(0.799, 0.721, 0.995, 1)
 roughness = 0.97
-albedo_texture = SubResource("tex_fabric")
+albedo_texture = ExtResource("6_fabric_tex")
 normal_enabled = true
-normal_scale = 0.6
+normal_scale = 0.3
 normal_texture = SubResource("nrm_fabric")
 uv1_scale = Vector3(3, 3, 1)
 
